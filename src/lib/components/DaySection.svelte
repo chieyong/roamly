@@ -3,7 +3,6 @@
   import { flip } from 'svelte/animate';
   import type { Activity, ActivityEnrichment, Section } from '$lib/types';
   import ActivityCard from './ActivityCard.svelte';
-  import AIPanel from './AIPanel.svelte';
   import { addActivity, updateActivity, generateId, reorderSection } from '$lib/stores/trip';
   import { calcNextTime } from '$lib/utils/time';
   import { enrichActivity } from '$lib/ai/suggestions';
@@ -31,10 +30,6 @@
   // DnD local copy
   let items = $state<Activity[]>([]);
   $effect(() => { items = sectionActivities.map((a) => ({ ...a })); });
-
-  // AI panel (per-card suggestions)
-  let aiActivityId = $state<string | null>(null);
-  const aiActivity = $derived(aiActivityId ? items.find((a) => a.id === aiActivityId) : null);
 
   // ── Add-activity state machine ───────────────────────────────────────────
   // idle → typing → enriching → preview → idle
@@ -178,16 +173,7 @@
         <ActivityCard
           activity={item}
           isDragging={draggedId === item.id}
-          onaiClick={(id) => { aiActivityId = aiActivityId === id ? null : id; }}
         />
-        {#if aiActivityId === item.id && aiActivity}
-          <div class="absolute right-0 top-full z-20 mt-1">
-            <AIPanel
-              activity={aiActivity}
-              onclose={() => { aiActivityId = null; }}
-            />
-          </div>
-        {/if}
       </div>
     {/each}
 
