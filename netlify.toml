@@ -1,0 +1,15 @@
+[build]
+  command   = "npm run build"
+  publish   = ".svelte-kit/output/client"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-svelte"
+
+# Redirect all routes to SvelteKit (SPA-style fallback)
+[[redirects]]
+  from   = "/*"
+  to     = "/.netlify/functions/handler"
+  status = 200
