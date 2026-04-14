@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: 'Inter', 'DM Sans', system-ui, sans-serif;
+
+  --color-teal-50: #f0fdfa;
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+  --color-teal-300: #5eead4;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+  --color-teal-700: #0f766e;
+
+  --color-sand-50: #fafaf8;
+  --color-sand-100: #f4f3ef;
+  --color-sand-200: #e8e6e0;
+  --color-sand-300: #d4d1c8;
+
+  --color-ink-400: #8b8a84;
+  --color-ink-600: #57564f;
+  --color-ink-800: #2a2926;
+  --color-ink-900: #1a1917;
+}
+
+html {
+  font-family: var(--font-sans);
+  background-color: var(--color-sand-50);
+  color: var(--color-ink-800);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Drag ghost */
+.drag-ghost {
+  opacity: 0.4;
+}
+
+/* Focus mode transitions */
+.section-hide {
+  display: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-sand-300);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-400);
+}
