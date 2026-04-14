@@ -3,15 +3,13 @@
  *
  * Body: { activity: Activity, messages: { role, content }[] }
  *
- * Streams an OpenAI chat response about a specific activity.
+ * Calls OpenAI and returns a travel assistant reply.
  * The API key stays server-side — never sent to the client.
  */
-import { OPENAI_API_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import OpenAI from 'openai';
 import type { Activity } from '$lib/types';
 import { json, error, type RequestHandler } from '@sveltejs/kit';
-
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 const SYSTEM_PROMPT = `You are Roamly's travel assistant — a friendly, knowledgeable guide specializing in Japan travel.
 
@@ -27,35 +25,30 @@ Keep responses short and conversational — 2–4 sentences unless the user asks
 Always be warm, helpful, and specific. Avoid generic advice.`;
 
 export const POST: RequestHandler = async ({ request }: { request: Request }) => {
-  if (!OPENAI_API_KEY) {
-    throw error(500, 'OpenAI API key not configured');
-  }
+  const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey) throw error(500, 'OpenAI API key not configured');
+
+  const openai = new OpenAI({ apiKey });
 
   const body = await request.json();
   const activity: Activity = body.activity;
   const messages: { role: 'user' | 'assistant'; content: string }[] = body.messages ?? [];
 
-  if (!activity?.title) {
-    throw error(400, 'Missing activity');
-  }
+  if (!activity?.title) throw error(400, 'Missing activity');
 
-  // Build context about the activity for the first message
   const activityContext = [
     `Activity: ${activity.title}`,
-    activity.location  ? `Location: ${activity.location}`  : null,
-    activity.time      ? `Planned time: ${activity.time}`  : null,
-    activity.duration  ? `Duration: ${activity.duration}`  : null,
-    activity.notes     ? `Notes: ${activity.notes}`        : null,
+    activity.location ? `Location: ${activity.location}` : null,
+    activity.time     ? `Planned time: ${activity.time}` : null,
+    activity.duration ? `Duration: ${activity.duration}` : null,
+    activity.notes    ? `Notes: ${activity.notes}`       : null,
   ]
     .filter(Boolean)
     .join('\n');
 
   const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
-    {
-      role: 'system',
-      content: `The user is asking about this planned activity:\n${activityContext}`,
-    },
+    { role: 'system', content: `The user is asking about this planned activity:\n${activityContext}` },
     ...messages,
   ];
 
@@ -67,6 +60,5 @@ export const POST: RequestHandler = async ({ request }: { request: Request }) =>
   });
 
   const reply = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.';
-
   return json({ reply });
 };
