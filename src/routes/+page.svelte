@@ -10,13 +10,13 @@
   });
 
   function formatDateFull(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    return new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
     });
   }
 
   function formatDateShort(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' });
   }
 
   // Each location block height = dayCount × PX_PER_DAY, with a minimum
@@ -109,7 +109,7 @@
                           class="text-[11px] px-2 py-1 rounded-full font-medium transition-colors hover:opacity-80"
                           style="background-color: rgba(255,255,255,0.65); color: #57564f;"
                         >
-                          {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}
+                          {new Date(day.date + 'T00:00:00').toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric' })}
                         </a>
                       {/each}
                     </div>

@@ -115,6 +115,7 @@ export interface SharedTripSnapshot {
   trip: Trip;
   days: Day[];
   activities: Activity[];
+  canEdit: boolean;
   createdAt: number;
 }
 
@@ -123,7 +124,8 @@ export async function createShareLink(
   ownerName: string,
   trip: Trip,
   days: Day[],
-  activities: Activity[]
+  activities: Activity[],
+  canEdit = false
 ): Promise<string> {
   const shareId = `${trip.id}-${Date.now().toString(36)}`;
   const sharedRef = doc(db, 'shared', shareId);
@@ -134,6 +136,7 @@ export async function createShareLink(
     trip,
     days,
     activities,
+    canEdit,
     createdAt: Date.now(),
   };
   await setDoc(sharedRef, snapshot);

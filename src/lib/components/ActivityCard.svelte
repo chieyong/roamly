@@ -92,7 +92,7 @@
   }
 
   function handleDelete() {
-    if (confirm(`Remove "${activity.title}"?`)) deleteActivity(activity.id);
+    if (confirm(`"${activity.title}" verwijderen?`)) deleteActivity(activity.id);
   }
 
   function toggleExpand() {
@@ -124,7 +124,7 @@
         bind:value={editTitle}
         onkeydown={handleKeydown}
         use:focusEl
-        placeholder="Activity name"
+        placeholder="Naam activiteit"
         class="w-full text-sm font-medium rounded-xl px-3 py-2.5 border focus:outline-none transition-colors"
         style="background-color: #fafaf8; border-color: #e8e6e0; color: #1a1917;"
       />
@@ -139,7 +139,7 @@
         <input
           bind:value={editLocation}
           onkeydown={handleKeydown}
-          placeholder="Place or area"
+          placeholder="Locatie of buurt"
           class="flex-1 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
           style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
         />
@@ -148,7 +148,7 @@
         bind:value={editNotes}
         onkeydown={handleKeydown}
         rows={2}
-        placeholder="Notes…"
+        placeholder="Notities…"
         class="w-full text-xs rounded-xl px-3 py-2 border focus:outline-none resize-none transition-colors"
         style="background-color: #fafaf8; border-color: #e8e6e0; color: #57564f;"
       ></textarea>
@@ -157,12 +157,12 @@
           onclick={() => editingActivityId.set(null)}
           class="text-xs px-3 py-1.5 rounded-xl transition-colors"
           style="color: #8b8a84;"
-        >Cancel</button>
+        >Annuleren</button>
         <button
           onclick={save}
           class="text-xs px-4 py-1.5 rounded-xl font-medium transition-colors"
           style="background-color: #14b8a6; color: white;"
-        >Save</button>
+        >Opslaan</button>
       </div>
     </div>
 
@@ -215,7 +215,7 @@
               {#if activity.notes}
                 <p class="text-xs leading-relaxed line-clamp-3" style="color: #57564f;">{activity.notes}</p>
               {:else}
-                <p class="text-xs italic" style="color: #b0ada7;">No description yet.</p>
+                <p class="text-xs italic" style="color: #b0ada7;">Nog geen omschrijving.</p>
               {/if}
               {#if activity.duration}
                 <span class="text-xs" style="color: #a09e98;">⏱ {activity.duration}</span>
@@ -230,21 +230,21 @@
               class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-colors font-medium"
               style="background-color: #f0fdfa; color: #0d9488;"
             >
-              <span>✦</span> Ask AI
+              <span>✦</span> Vraag AI
             </button>
             <button
               onclick={(e) => { e.stopPropagation(); startEditing(); }}
               class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-colors"
               style="color: #8b8a84;"
             >
-              Edit
+              Bewerken
             </button>
             <button
               onclick={(e) => { e.stopPropagation(); handleDelete(); }}
               class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-colors ml-auto"
               style="color: #c4b8b8;"
             >
-              Remove
+              Verwijderen
             </button>
           </div>
         </div>

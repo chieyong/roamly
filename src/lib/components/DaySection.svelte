@@ -183,7 +183,7 @@
         class="w-full text-left px-4 py-2.5 rounded-xl text-xs transition-colors"
         style="color: #c4bfb9;"
       >
-        Nothing planned yet — <span style="color: #14b8a6;">add something</span>
+        Nog niets gepland — <span style="color: #14b8a6;">voeg iets toe</span>
       </button>
     {/if}
   </div>
@@ -197,7 +197,7 @@
         bind:value={newTitle}
         onkeydown={handleAddKeydown}
         use:focusEl
-        placeholder="What's happening {label}?"
+        placeholder="Wat staat er {label} op het programma?"
         class="flex-1 text-sm rounded-xl px-3 py-2.5 border focus:outline-none transition-colors"
         style="background-color: white; border-color: #d4d1c8; color: #1a1917;"
       />

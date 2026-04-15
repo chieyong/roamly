@@ -9,14 +9,16 @@
   import DaySection from '$lib/components/DaySection.svelte';
   import MaybeList from '$lib/components/MaybeList.svelte';
   import MiniMap from '$lib/components/MiniMap.svelte';
+  import ShareModal from '$lib/components/ShareModal.svelte';
   import { getCoord, TOKYO_CENTER } from '$lib/utils/coordinates';
   import type { Activity, Section } from '$lib/types';
   import type { LatLng } from '$lib/utils/coordinates';
 
   // Only ONE MiniMap is mounted at a time (mobile OR desktop) so the hidden
   // one never gets a 0×0 container that causes Leaflet NaN projection errors.
-  let isDesktop = $state(false);
+  let isDesktop  = $state(false);
   let mq: MediaQueryList | undefined;
+  let shareOpen  = $state(false);
 
   onMount(() => {
     mq = window.matchMedia('(min-width: 1024px)');
@@ -96,17 +98,17 @@
 
   // ─────────────────────────────────────────────────────────────────────────
   function formatDate(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    return new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', {
       weekday: 'long', month: 'long', day: 'numeric'
     });
   }
 
   function formatShort(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' });
   }
 
   function formatDayPill(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+    return new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric' });
   }
 
   const sectionOrder: Section[] = ['morning', 'afternoon', 'evening'];
@@ -147,19 +149,38 @@
           {formatDate(day.date)}
         </h1>
 
-        <button
-          onclick={() => focusMode.update((v) => !v)}
-          class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all mt-0.5"
-          style="{$focusMode
-            ? 'background-color: #f0fdfa; color: #0d9488; border: 1px solid #a7f3d0;'
-            : 'background-color: transparent; color: #b0ada7; border: 1px solid #e8e6e0;'}"
-        >
-          <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="6" cy="6" r="4"/>
-            <circle cx="6" cy="6" r="1.5" fill="currentColor" stroke="none"/>
-          </svg>
-          {$focusMode ? 'focused' : 'focus'}
-        </button>
+        <div class="flex items-center gap-2 mt-0.5">
+          <!-- Delen -->
+          <button
+            onclick={() => { shareOpen = true; }}
+            class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+            style="background-color: transparent; color: #b0ada7; border: 1px solid #e8e6e0;"
+          >
+            <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="9" cy="2" r="1.2"/>
+              <circle cx="2" cy="6" r="1.2"/>
+              <circle cx="9" cy="10" r="1.2"/>
+              <line x1="3.1" y1="5.4" x2="7.9" y2="2.6"/>
+              <line x1="3.1" y1="6.6" x2="7.9" y2="9.4"/>
+            </svg>
+            Delen
+          </button>
+
+          <!-- Focus -->
+          <button
+            onclick={() => focusMode.update((v) => !v)}
+            class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+            style="{$focusMode
+              ? 'background-color: #f0fdfa; color: #0d9488; border: 1px solid #a7f3d0;'
+              : 'background-color: transparent; color: #b0ada7; border: 1px solid #e8e6e0;'}"
+          >
+            <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="6" cy="6" r="4"/>
+              <circle cx="6" cy="6" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+            {$focusMode ? 'gefocust' : 'focus'}
+          </button>
+        </div>
       </div>
 
       <div class="flex gap-1.5 mt-4 overflow-x-auto pb-1" style="scrollbar-width: none; -webkit-overflow-scrolling: touch;">
@@ -373,4 +394,8 @@
     </div>
   {/if}
 
+{/if}
+
+{#if shareOpen}
+  <ShareModal onClose={() => { shareOpen = false; }} />
 {/if}

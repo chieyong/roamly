@@ -13,7 +13,7 @@
   } = $props();
 
   function formatDate(dateStr: string) {
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' });
   }
 
   const dayCount = $derived(() => {
@@ -70,7 +70,7 @@
     <div class="flex flex-wrap gap-1">
       {#each days.slice(0, 5) as day}
         <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style="background-color: rgba(255,255,255,0.7); color: #57564f;">
-          {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
+          {new Date(day.date + 'T00:00:00').toLocaleDateString('nl-NL', { weekday: 'short' })}
         </span>
       {/each}
       {#if days.length > 5}
