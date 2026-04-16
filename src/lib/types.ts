@@ -27,6 +27,7 @@ export interface Day {
   locationId: string;
   date: string; // ISO date string e.g. "2024-04-15"
   label?: string; // optional override label
+  departureLocationId?: string; // set when this is a travel day (departing from another location)
 }
 
 export interface Activity {

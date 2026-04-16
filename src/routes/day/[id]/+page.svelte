@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { get } from 'svelte/store';
   import { onMount, onDestroy } from 'svelte';
-  import { days, locations, activities, updateActivity } from '$lib/stores/trip';
+  import { days, locations, activities, updateActivity, updateDay } from '$lib/stores/trip';
   import { focusMode, focusSection, mapFocusLocation } from '$lib/stores/ui';
   import { optimizeDay } from '$lib/ai/suggestions';
   import DaySection from '$lib/components/DaySection.svelte';
@@ -37,6 +37,21 @@
   const prevDay      = $derived(globalIndex > 0 ? allSorted[globalIndex - 1] : null);
   const nextDay      = $derived(globalIndex < allSorted.length - 1 ? allSorted[globalIndex + 1] : null);
   const dayIndex     = $derived(locationDays.findIndex((d) => d.id === dayId));
+
+  // Reisdag
+  const departureLocation = $derived(
+    day?.departureLocationId ? $locations.find(l => l.id === day!.departureLocationId) ?? null : null
+  );
+  const otherLocations = $derived(
+    $locations.filter(l => l.id !== location?.id)
+  );
+  let travelMenuOpen = $state(false);
+
+  function setDeparture(locId: string | null) {
+    if (!day) return;
+    updateDay(day.id, { departureLocationId: locId ?? undefined });
+    travelMenuOpen = false;
+  }
 
   const mornActivities = $derived(
     $activities.filter((a) => a.dayId === dayId && a.section === 'morning').sort((a, b) => a.order - b.order)
@@ -145,11 +160,68 @@
       </div>
 
       <div class="flex items-start justify-between gap-3">
-        <h1 class="text-2xl font-semibold" style="color: #1a1917; letter-spacing: -0.02em; line-height: 1.2;">
+        <h1 class="text-2xl font-semibold" style="color: var(--clr-text, #1a1917); letter-spacing: -0.02em; line-height: 1.2; font-family: var(--font-header);">
           {formatDate(day.date)}
         </h1>
 
         <div class="flex items-center gap-2 mt-0.5">
+          <!-- Reisdag toggle -->
+          <div class="relative">
+            <button
+              onclick={() => { travelMenuOpen = !travelMenuOpen; }}
+              class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+              style="{departureLocation
+                ? 'background-color: #fefce8; color: #92400e; border: 1px solid #fde68a;'
+                : 'background-color: transparent; color: #b0ada7; border: 1px solid #e8e6e0;'}"
+            >
+              🚄 {departureLocation ? `van ${departureLocation.name}` : 'reisdag'}
+            </button>
+
+            {#if travelMenuOpen}
+              <button
+                class="fixed inset-0 z-10"
+                onclick={() => { travelMenuOpen = false; }}
+                style="background: transparent; border: none; cursor: default;"
+                aria-label="Sluit menu"
+              ></button>
+              <div
+                class="absolute right-0 mt-1 rounded-2xl z-20"
+                style="background: white; border: 1px solid #e8e6e0; box-shadow: 0 4px 20px rgba(0,0,0,0.10); min-width: 180px; top: 100%;"
+              >
+                <div class="px-3 py-2" style="border-bottom: 1px solid #f0eeea;">
+                  <p class="text-xs" style="color: #8b8a84;">Vertrek vanuit…</p>
+                </div>
+                <div class="py-1.5">
+                  {#each otherLocations as loc}
+                    <button
+                      onclick={() => setDeparture(loc.id)}
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors"
+                      style="color: {day?.departureLocationId === loc.id ? '#0d9488' : '#57564f'}; background-color: {day?.departureLocationId === loc.id ? '#f0fdfa' : 'transparent'};"
+                      onmouseenter={(e) => { if (day?.departureLocationId !== loc.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                      onmouseleave={(e) => { if (day?.departureLocationId !== loc.id) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      <span>{loc.emoji}</span>
+                      <span>{loc.name}</span>
+                      {#if day?.departureLocationId === loc.id}<span class="ml-auto">✓</span>{/if}
+                    </button>
+                  {/each}
+                  {#if departureLocation}
+                    <div style="height: 1px; background: #f0eeea; margin: 4px 12px;"></div>
+                    <button
+                      onclick={() => setDeparture(null)}
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left"
+                      style="color: #b0ada7;"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      Geen reisdag
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            {/if}
+          </div>
+
           <!-- Delen -->
           <button
             onclick={() => { shareOpen = true; }}
@@ -184,6 +256,22 @@
       </div>
 
       <div class="flex gap-1.5 mt-4 overflow-x-auto pb-1" style="scrollbar-width: none; -webkit-overflow-scrolling: touch;">
+        <!-- Vorige locatie pill — alleen op de EERSTE dag van een nieuwe locatie -->
+        {#if prevDay && dayIndex === 0}
+          {@const prevLoc = $locations.find((l) => l.id === $days.find(d => d.id === prevDay.id)?.locationId)}
+          {#if prevLoc && prevLoc.id !== location?.id}
+            <a
+              href="/day/{prevDay.id}"
+              class="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs transition-all"
+              style="color: #c4bfb9; border: 1px dashed #e8e6e0;"
+            >
+              ← {prevLoc.emoji} {prevLoc.name}
+            </a>
+            <span class="flex-shrink-0 flex items-center px-1 text-xs" style="color: #d4d1c8;">·</span>
+          {/if}
+        {/if}
+
+        <!-- Dagen van huidige locatie -->
         {#each locationDays as d}
           <a
             href="/day/{d.id}"
@@ -196,6 +284,7 @@
           </a>
         {/each}
 
+        <!-- Volgende locatie pill — alleen op de LAATSTE dag van huidige locatie -->
         {#if nextDay}
           {@const nextLoc = $locations.find((l) => l.id === allSorted.find(d => d.id === nextDay.id)?.locationId)}
           {#if nextLoc && nextLoc.id !== location?.id}
@@ -263,6 +352,25 @@
         <!-- Sections -->
         <div class="lg:col-span-2 space-y-8">
           <DaySection {dayId} section="morning"   sectionActivities={mornActivities} />
+
+          <!-- ── Reisbanner (tussen ochtend en middag) ────────────────────── -->
+          {#if departureLocation}
+            <div
+              class="flex items-center gap-3 px-4 py-3 rounded-2xl"
+              style="background: linear-gradient(to right, #fffbeb, #f0fdfa); border: 1px solid #fde68a;"
+            >
+              <span style="font-size: 1.25rem; flex-shrink: 0;">🚄</span>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-semibold" style="color: #92400e;">
+                  {departureLocation.name}
+                  <span style="color: #a09e98; font-weight: 400;"> → </span>
+                  {location?.name}
+                </p>
+                <p class="text-xs mt-0.5" style="color: #b45309;">Reisdag — plan activiteiten voor en na aankomst</p>
+              </div>
+            </div>
+          {/if}
+
           <DaySection {dayId} section="afternoon" sectionActivities={aftnActivities} />
           <DaySection {dayId} section="evening"   sectionActivities={evngActivities} />
 

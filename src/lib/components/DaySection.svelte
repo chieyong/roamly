@@ -199,7 +199,7 @@
         use:focusEl
         placeholder="Wat staat er {label} op het programma?"
         class="flex-1 text-sm rounded-xl px-3 py-2.5 border focus:outline-none transition-colors"
-        style="background-color: white; border-color: #d4d1c8; color: #1a1917;"
+        style="background-color: var(--clr-surface, white); border-color: var(--clr-border, #d4d1c8); color: var(--clr-text, #1a1917);"
       />
       <button
         onclick={handleAdd}
@@ -218,7 +218,7 @@
     <!-- Step 2: thinking shimmer -->
     <div
       class="mt-2 rounded-2xl px-4 py-3 flex items-center gap-3"
-      style="background-color: white; border: 1px solid #e8e6e0;"
+      style="background-color: var(--clr-surface, white); border: 1px solid var(--clr-border, #e8e6e0);"
     >
       <div
         class="w-4 h-4 rounded-full flex-shrink-0 animate-spin"
@@ -234,7 +234,7 @@
     <!-- Step 3: preview enriched card -->
     <div
       class="mt-2 rounded-2xl overflow-hidden"
-      style="background-color: white; border: 1.5px solid #c4f1ea; box-shadow: 0 2px 12px rgba(20,184,166,0.08);"
+      style="background-color: var(--clr-surface, white); border: 1.5px solid #c4f1ea; box-shadow: 0 2px 12px rgba(20,184,166,0.08);"
     >
       <!-- Header: AI badge -->
       <div

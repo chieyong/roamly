@@ -32,34 +32,55 @@
   let editTime     = $state('');
   let editLocation = $state('');
 
-  // ── Contextual image ──────────────────────────────────────────────────────
-  function getImageSeed(title: string, location: string | undefined): string {
-    const t = (title + ' ' + (location ?? '')).toLowerCase();
-    if (/temple|shrine|torii|senso|meiji|fushimi/.test(t))       return 'japan-temple-42';
-    if (/garden|park|bamboo|forest|nature/.test(t))               return 'japan-garden-17';
-    if (/ramen|soba|udon|noodle/.test(t))                         return 'japan-ramen-88';
-    if (/sushi|sashimi|seafood/.test(t))                          return 'japan-sushi-55';
-    if (/coffee|café|cafe|matcha/.test(t))                        return 'japan-cafe-31';
-    if (/market|tsukiji|food|eat|dinner|lunch|breakfast/.test(t)) return 'japan-food-63';
-    if (/onsen|hot spring|bath|spa/.test(t))                      return 'japan-onsen-74';
-    if (/shopping|store|mall|fashion|vintage/.test(t))            return 'japan-shopping-22';
-    if (/museum|gallery|art|exhibition/.test(t))                  return 'japan-museum-49';
-    if (/hike|mountain|fuji|climb/.test(t))                       return 'japan-mountain-91';
-    if (/bar|drinks|beer|cocktail|sake|izakaya/.test(t))          return 'japan-bar-38';
-    if (/hotel|hostel|airbnb|check.?in/.test(t))                  return 'japan-hotel-66';
-    if (/observation|tower|sky|view|rooftop/.test(t))             return 'japan-skyline-80';
-    if (/walk|wander|stroll|street|explore/.test(t))              return 'japan-street-14';
-    if (/shibuya/.test(t))    return 'shibuya-crossing-7';
-    if (/shinjuku/.test(t))   return 'shinjuku-night-3';
-    if (/asakusa/.test(t))    return 'asakusa-temple-9';
-    if (/harajuku/.test(t))   return 'harajuku-street-5';
-    if (/ginza/.test(t))      return 'ginza-street-11';
-    if (/nakameguro/.test(t)) return 'nakameguro-canal-2';
-    return 'japan-travel-' + ((title.charCodeAt(0) ?? 50) % 30 + 1);
+  // ── Contextual image via Unsplash keyword search ─────────────────────────
+  function getImageQuery(title: string, loc: string | undefined): string {
+    const t = (title + ' ' + (loc ?? '')).toLowerCase();
+    // Named districts / cities first
+    if (/shibuya/.test(t))      return 'shibuya crossing tokyo street crowd';
+    if (/shinjuku/.test(t))     return 'shinjuku tokyo neon night';
+    if (/asakusa/.test(t))      return 'asakusa senso-ji temple tokyo';
+    if (/harajuku/.test(t))     return 'harajuku tokyo fashion street';
+    if (/ginza/.test(t))        return 'ginza tokyo luxury shopping boulevard';
+    if (/nakameguro/.test(t))   return 'nakameguro canal cherry blossom';
+    if (/akihabara/.test(t))    return 'akihabara tokyo electronics anime';
+    if (/ueno/.test(t))         return 'ueno park tokyo';
+    if (/odaiba/.test(t))       return 'odaiba tokyo bay rainbow bridge';
+    if (/arashiyama/.test(t))   return 'arashiyama bamboo forest kyoto';
+    if (/fushimi/.test(t))      return 'fushimi inari torii gates kyoto';
+    if (/gion/.test(t))         return 'gion geisha kyoto traditional street';
+    if (/nara/.test(t))         return 'nara deer park japan';
+    if (/dotonbori/.test(t))    return 'dotonbori osaka canal night lights';
+    if (/osaka/.test(t))        return 'osaka japan cityscape';
+    if (/kyoto/.test(t))        return 'kyoto japan temple traditional';
+    if (/hiroshima/.test(t))    return 'hiroshima peace memorial japan';
+    if (/hakone/.test(t))       return 'hakone fuji mountain japan';
+    // Activity types
+    if (/temple|shrine|torii/.test(t))              return 'japanese shinto shrine torii gate';
+    if (/bamboo|forest/.test(t))                    return 'bamboo forest japan green path';
+    if (/cherry|sakura|blossom/.test(t))            return 'sakura cherry blossom japan pink';
+    if (/garden|park/.test(t))                      return 'japanese garden pond lantern';
+    if (/ramen|soba|udon|noodle/.test(t))           return 'ramen bowl japan noodles';
+    if (/sushi|sashimi|nigiri/.test(t))             return 'sushi platter japan fresh';
+    if (/izakaya|bar|sake|beer/.test(t))            return 'japanese izakaya bar lanterns';
+    if (/coffee|café|cafe|kissaten/.test(t))        return 'japanese coffee shop cozy';
+    if (/matcha|tea/.test(t))                       return 'matcha tea ceremony japan';
+    if (/food|eat|dinner|lunch|breakfast|market/.test(t)) return 'japanese street food market';
+    if (/onsen|hot spring|bath|sento/.test(t))      return 'onsen hot spring japan steam';
+    if (/shopping|mall|fashion|vintage/.test(t))    return 'japan shopping arcade street';
+    if (/tsukiji|fish|seafood/.test(t))             return 'tsukiji fish market japan';
+    if (/museum|gallery|art/.test(t))               return 'japanese art museum modern';
+    if (/castle|shiro/.test(t))                     return 'japanese castle himeji';
+    if (/fuji|mountain|hike|climb/.test(t))         return 'mount fuji japan sunrise';
+    if (/hotel|check.?in|ryokan/.test(t))           return 'japanese ryokan hotel interior';
+    if (/observation|tower|sky|rooftop|view/.test(t)) return 'tokyo tower skyline view';
+    if (/walk|stroll|street|explore/.test(t))       return 'japan street walk explore';
+    if (/train|shinkansen|subway|station/.test(t))  return 'shinkansen bullet train japan';
+    // Default: use cleaned-up title
+    return `${title} japan`.slice(0, 50);
   }
 
   const imageUrl = $derived(
-    `https://picsum.photos/seed/${getImageSeed(activity.title, activity.location)}/600/200`
+    `https://source.unsplash.com/featured/128x128/?${encodeURIComponent(getImageQuery(activity.title, activity.location))}`
   );
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -118,7 +139,7 @@
     <!-- ── Edit form ──────────────────────────────────────────────────────── -->
     <div
       class="rounded-2xl p-4 space-y-2.5"
-      style="background-color: white; border: 1px solid #d4d1c8; box-shadow: 0 2px 8px rgba(0,0,0,0.06);"
+      style="background-color: var(--clr-surface, white); border: 1px solid var(--clr-border, #d4d1c8); box-shadow: 0 2px 8px rgba(0,0,0,0.06);"
     >
       <input
         bind:value={editTitle}
@@ -126,7 +147,7 @@
         use:focusEl
         placeholder="Naam activiteit"
         class="w-full text-sm font-medium rounded-xl px-3 py-2.5 border focus:outline-none transition-colors"
-        style="background-color: #fafaf8; border-color: #e8e6e0; color: #1a1917;"
+        style="background-color: var(--clr-bg, #fafaf8); border-color: var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
       />
       <div class="flex gap-2">
         <input
@@ -171,8 +192,8 @@
     <button
       onclick={toggleExpand}
       class="w-full text-left rounded-2xl px-4 py-3 transition-all duration-150 cursor-pointer"
-      style="background-color: white;
-             border: 1px solid {expanded ? '#c4f1ea' : '#ece9e4'};
+      style="background-color: var(--clr-surface, white);
+             border: 1px solid {expanded ? '#c4f1ea' : 'var(--clr-border, #ece9e4)'};
              {expanded ? 'border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent;' : ''}"
     >
       <div class="flex items-baseline justify-between gap-3">
@@ -199,7 +220,7 @@
         <!-- ── Detail view ───────────────────────────────────────────────── -->
         <div
           class="rounded-b-2xl px-4 py-3"
-          style="background-color: white; border: 1px solid #c4f1ea; border-top: none;"
+          style="background-color: var(--clr-surface, white); border: 1px solid #c4f1ea; border-top: none;"
         >
           <!-- Image + details row -->
           <div class="flex gap-3 mb-3">

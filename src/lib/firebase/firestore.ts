@@ -22,7 +22,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { app } from './config';
-import type { Trip, Day, Activity } from '$lib/types';
+import type { Trip, Location, Day, Activity } from '$lib/types';
 
 export const db = getFirestore(app);
 
@@ -34,6 +34,10 @@ function userRef(uid: string) {
 
 function tripsCol(uid: string) {
   return collection(db, 'users', uid, 'trips');
+}
+
+function locationsCol(uid: string) {
+  return collection(db, 'users', uid, 'locations');
 }
 
 function daysCol(uid: string) {
@@ -58,6 +62,16 @@ export function subscribeTrips(uid: string, cb: (trips: Trip[]) => void): Unsubs
   return onSnapshot(tripsCol(uid), (snap) => {
     cb(snap.docs.map((d) => d.data() as Trip));
   });
+}
+
+// ── Locations ─────────────────────────────────────────────────────────────
+
+export async function saveLocation(uid: string, location: Location) {
+  await setDoc(doc(locationsCol(uid), location.id), location);
+}
+
+export async function deleteLocationDoc(uid: string, locationId: string) {
+  await deleteDoc(doc(locationsCol(uid), locationId));
 }
 
 // ── Days ──────────────────────────────────────────────────────────────────

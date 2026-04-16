@@ -7,35 +7,51 @@
   let { activity, onClose }: { activity: Activity; onClose: () => void } = $props();
 
   type Message = { role: 'user' | 'assistant'; content: string };
+  type Phase = 'select' | 'chat';
 
-  let messages = $state<Message[]>([]);
-  let input    = $state('');
-  let loading  = $state(false);
-  let scrollEl = $state<HTMLElement | null>(null);
+  let phase     = $state<Phase>('select');
+  let messages  = $state<Message[]>([]);
+  let input     = $state('');
+  let loading   = $state(false);
+  let scrollEl  = $state<HTMLElement | null>(null);
   let signingIn = $state(false);
 
-  // Toon login-gate als het quotum op is en de gebruiker niet ingelogd is
+  const loc = activity.location ? ` in ${activity.location}` : '';
+
+  // Preset AI options
+  const presets = [
+    {
+      icon: '💡',
+      label: 'Tips voor de activiteit',
+      prompt: `Geef 3 praktische tips voor ${activity.title}${loc}. Houd het kort en concreet.`,
+    },
+    {
+      icon: '🚶',
+      label: 'Wat te doen erna?',
+      prompt: `Ik ben bij ${activity.title}${loc}. Geef 3 activiteiten die goed passen om daarna te doen in de buurt.`,
+    },
+    {
+      icon: '🍜',
+      label: 'Eten & drinken in de buurt',
+      prompt: `Ik ben bij ${activity.title}${loc}. Geef 3 concrete restaurants, cafés of eetkraampjes in de directe buurt die ik moet proberen.`,
+    },
+  ];
+
   const showGate = $derived(!$user && $aiQuotaRemaining <= 0);
 
-  // Stuur automatisch een openingstip zodra de drawer opent (mits quotum beschikbaar)
-  $effect(() => {
-    if (messages.length === 0 && !showGate) sendMessage(null);
-  });
-
-  // Scroll naar beneden bij nieuw bericht
+  // Scroll to bottom on new messages
   $effect(() => {
     void messages.length;
     if (scrollEl) setTimeout(() => scrollEl?.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' }), 50);
   });
 
-  async function sendMessage(userText: string | null) {
+  async function sendMessage(userText: string) {
     if (!canUseAi()) return;
-
-    const text = userText ?? `Geef één tip voor: ${activity.title}${activity.location ? ` in ${activity.location}` : ''}`;
-    if (userText) messages = [...messages, { role: 'user', content: userText }];
+    messages = [...messages, { role: 'user', content: userText }];
     input   = '';
     loading = true;
     incrementAiCall();
+    phase = 'chat';
 
     try {
       const res = await fetch('/api/ai', {
@@ -43,7 +59,7 @@
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           activity,
-          messages: [...messages, { role: 'user', content: text }],
+          messages: [...messages],
         }),
       });
       if (!res.ok) throw new Error(`${res.status}`);
@@ -54,6 +70,14 @@
     } finally {
       loading = false;
     }
+  }
+
+  function pickPreset(prompt: string) {
+    sendMessage(prompt);
+  }
+
+  function startFreeQuestion() {
+    phase = 'chat';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -69,21 +93,31 @@
   async function handleLogin() {
     signingIn = true;
     try { await signInWithGoogle(); }
-    catch { /* popup gesloten */ }
+    catch {}
     finally { signingIn = false; }
   }
 </script>
 
 <div
   class="rounded-b-2xl overflow-hidden flex flex-col"
-  style="background-color: white; border: 1px solid #c4f1ea; border-top: none; max-height: 340px;"
+  style="background-color: white; border: 1px solid #c4f1ea; border-top: none; max-height: 360px;"
 >
   <!-- Header -->
   <div
     class="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
     style="border-bottom: 1px solid #f0fdf9; background-color: #f8fffe;"
   >
-    <span class="text-xs font-medium" style="color: #0d9488;">✦ AI-assistent — {activity.title}</span>
+    <div class="flex items-center gap-2">
+      {#if phase === 'chat' && messages.length > 0}
+        <button
+          onclick={() => { phase = 'select'; messages = []; }}
+          class="text-xs rounded-lg transition-colors"
+          style="color: #b0ada7;"
+          aria-label="Terug"
+        >←</button>
+      {/if}
+      <span class="text-xs font-medium" style="color: #0d9488;">✦ AI-assistent</span>
+    </div>
     <div class="flex items-center gap-2">
       {#if !$user}
         <span class="text-xs" style="color: #b0ada7;">{$aiQuotaRemaining}/{MAX_GUEST_CALLS} gratis</span>
@@ -120,25 +154,45 @@
       </button>
     </div>
 
-  {:else}
-    <!-- ── Berichten ──────────────────────────────────────────────────────── -->
-    <div bind:this={scrollEl} class="flex-1 overflow-y-auto px-4 py-3 space-y-3" style="min-height: 120px;">
-      {#if loading && messages.length === 0}
-        <div class="flex items-center gap-1.5 pt-1" style="color: #a09e98;">
-          <span class="text-xs">Bezig met nadenken</span>
-          <span class="flex gap-0.5">
-            <span class="w-1 h-1 rounded-full bg-current animate-bounce" style="animation-delay: 0ms;"></span>
-            <span class="w-1 h-1 rounded-full bg-current animate-bounce" style="animation-delay: 150ms;"></span>
-            <span class="w-1 h-1 rounded-full bg-current animate-bounce" style="animation-delay: 300ms;"></span>
-          </span>
-        </div>
-      {/if}
+  {:else if phase === 'select'}
+    <!-- ── Keuze panel ────────────────────────────────────────────────────── -->
+    <div class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+      <p class="text-xs mb-3" style="color: #a09e98;">Wat wil je weten over <span style="color: #1a1917; font-weight: 500;">{activity.title}</span>?</p>
 
+      {#each presets as preset}
+        <button
+          onclick={() => pickPreset(preset.prompt)}
+          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors"
+          style="background-color: #f4f3ef; border: 1px solid transparent;"
+          onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#a7f3d0'; (e.currentTarget as HTMLElement).style.backgroundColor = '#f0fdfa'; }}
+          onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+        >
+          <span style="font-size: 1rem; flex-shrink: 0;">{preset.icon}</span>
+          <span class="text-xs font-medium" style="color: #1a1917;">{preset.label}</span>
+        </button>
+      {/each}
+
+      <!-- Eigen vraag -->
+      <button
+        onclick={startFreeQuestion}
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors"
+        style="background-color: transparent; border: 1px dashed #e8e6e0;"
+        onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#a7f3d0'; }}
+        onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#e8e6e0'; }}
+      >
+        <span style="font-size: 1rem; flex-shrink: 0;">✏️</span>
+        <span class="text-xs" style="color: #8b8a84;">Stel een eigen vraag…</span>
+      </button>
+    </div>
+
+  {:else}
+    <!-- ── Chat view ──────────────────────────────────────────────────────── -->
+    <div bind:this={scrollEl} class="flex-1 overflow-y-auto px-4 py-3 space-y-3" style="min-height: 120px;">
       {#each messages as msg}
         {#if msg.role === 'assistant'}
           <div class="flex gap-2 items-start">
             <span class="text-xs flex-shrink-0 mt-0.5" style="color: #0d9488;">✦</span>
-            <p class="text-xs leading-relaxed flex-1" style="color: #2a2926;">{msg.content}</p>
+            <p class="text-xs leading-relaxed flex-1 whitespace-pre-wrap" style="color: #2a2926;">{msg.content}</p>
           </div>
         {:else}
           <div class="flex justify-end">
@@ -148,7 +202,7 @@
         {/if}
       {/each}
 
-      {#if loading && messages.length > 0}
+      {#if loading}
         <div class="flex gap-2 items-center">
           <span class="text-xs flex-shrink-0" style="color: #0d9488;">✦</span>
           <span class="flex gap-0.5">
@@ -160,7 +214,7 @@
       {/if}
     </div>
 
-    <!-- ── Invoerregel ────────────────────────────────────────────────────── -->
+    <!-- Invoerregel -->
     <div class="flex items-center gap-2 px-3 py-2.5 flex-shrink-0" style="border-top: 1px solid #f0fdf9;">
       <input
         bind:value={input}
