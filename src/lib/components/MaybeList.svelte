@@ -21,18 +21,6 @@
   let dragging = $state(false);
   let items    = $state<Activity[]>([]);
 
-  // Handle-only drag: prevent accidental drag while scrolling on mobile.
-  // Drag only starts when the 6-dot handle receives a pointerdown.
-  let listDragEnabled = $state(false);
-
-  function onHandlePointerDown() {
-    listDragEnabled = true;
-    // Only reset if drag never actually started; if dragging is true, handleFinalize resets.
-    window.addEventListener('pointerup', () => {
-      if (!dragging) listDragEnabled = false;
-    }, { once: true });
-  }
-
   $effect(() => {
     if (!dragging) {
       items = filteredMaybe.map(a => ({ ...a }));
@@ -88,7 +76,6 @@
     }
 
     dragging = false;
-    listDragEnabled = false;
     if (isMainPage) draggingCityIdea.set(false);
     items = newItems;
   }
@@ -191,7 +178,7 @@
 
   <!-- Drag-and-drop list -->
   <div
-    use:dndzone={{ items, type: dndType, dropTargetStyle: {}, flipDurationMs: 200, dragDisabled: !listDragEnabled }}
+    use:dndzone={{ items, type: dndType, dropTargetStyle: {}, flipDurationMs: 200 }}
     onconsider={handleConsider}
     onfinalize={handleFinalize}
     class="space-y-2 min-h-[48px]"
@@ -203,11 +190,9 @@
           class="group flex items-start gap-3 p-3 rounded-2xl transition-all cursor-grab active:cursor-grabbing"
           style="background-color: #fafaf8; border: 1px solid #e8e6e0;"
         >
-          <!-- Drag handle: always visible on mobile, hover-only on desktop -->
+          <!-- Drag handle: visual affordance, whole card is draggable -->
           <div
-            onpointerdown={onHandlePointerDown}
-            class="flex-shrink-0 mt-0.5 opacity-35 lg:opacity-0 lg:group-hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing"
-            style="touch-action: none;"
+            class="flex-shrink-0 mt-0.5 opacity-25 lg:opacity-0 lg:group-hover:opacity-50 transition-opacity pointer-events-none"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color: #8b8a84;">
               <circle cx="5" cy="4" r="1" fill="currentColor" stroke="none"/>

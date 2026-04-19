@@ -332,6 +332,39 @@
    * strictly sequential dates (no overlaps). Applies corrections last→first
    * so updateLocation's own resolveConflicts doesn't fight back.
    */
+  /**
+   * Returns all dates [gapStart … gapEnd) as YYYY-MM-DD strings.
+   * Used to render unassigned days between two cities.
+   */
+  function gapDays(gapStart: string, gapEnd: string): string[] {
+    const result: string[] = [];
+    const cur = new Date(gapStart + 'T00:00:00');
+    const end = new Date(gapEnd   + 'T00:00:00');
+    while (cur < end) {
+      result.push(localDateStr(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return result;
+  }
+
+  /**
+   * One-line summary for a day: "Wijk · Activiteit 1, Activiteit 2"
+   * Shown in the Reis-page day row next to the date.
+   */
+  function daySummary(dayId: string): string {
+    const sectionOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
+    const acts = $activities
+      .filter(a => a.dayId === dayId && a.section !== 'maybe')
+      .sort((a, b) => {
+        const sd = (sectionOrder[a.section] ?? 99) - (sectionOrder[b.section] ?? 99);
+        return sd !== 0 ? sd : a.order - b.order;
+      });
+    if (acts.length === 0) return '';
+    const hood  = acts[0]?.location ?? '';
+    const names = acts.slice(0, 2).map(a => a.title).join(' · ');
+    return hood ? `${hood} · ${names}` : names;
+  }
+
   function cascadeAfterInsert(newLocId: string) {
     const sorted = [...get(locations)].sort((a, b) => a.startDate.localeCompare(b.startDate));
     const newIdx = sorted.findIndex(l => l.id === newLocId);
@@ -542,24 +575,24 @@
               <!-- Day rows -->
               <div class="flex flex-col" style="margin-left: 4px;">
                 {#each locationDays as day, i}
-                  {@const preview = topActivity(day.id)}
                   {@const depLoc = day.departureLocationId ? $locations.find(l => l.id === day.departureLocationId) : null}
-                  {@const hasContent = !!depLoc || !!preview}
-                  {@const rowBorderColor = hasContent ? cityColor(location.color) : '#dbd9d4'}
+                  {@const hasActivities = !!topActivity(day.id)}
+                  {@const summary = hasActivities ? daySummary(day.id) : ''}
                   <button
                     onclick={() => goto(`/day/${day.id}`)}
                     onpointerdown={(e) => e.stopPropagation()}
                     class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors rounded-r-xl"
-                    style="border-left: 3px solid {rowBorderColor}; background-color: transparent; touch-action: manipulation;"
-                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = hasContent ? cityBadge(location.color) : '#f7f6f4'; }}
+                    style="border-left: 3px solid {cityColor(location.color)}; background-color: transparent; touch-action: manipulation;"
+                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); }}
                     onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <div class="flex items-center gap-3 min-w-0">
-                      <span class="text-xs flex-shrink-0 tabular-nums" style="color: {hasContent ? 'var(--clr-muted, #8b8a84)' : '#b0ada7'}; min-width: 80px;">
+                      <span class="text-xs flex-shrink-0 tabular-nums" style="color: var(--clr-muted, #8b8a84); min-width: 80px;">
                         {formatDayRow(day.date)}
                       </span>
                       {#if depLoc}
-                        <span class="text-xs flex items-center gap-1.5" style="color: #9b9895;">
+                        <!-- Travel day: route indicator -->
+                        <span class="text-xs flex items-center gap-1.5 flex-shrink-0" style="color: #9b9895;">
                           <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M1 7h12M9 3l4 4-4 4"/>
                           </svg>
@@ -567,18 +600,17 @@
                           <span style="color: #d4d1c8;">→</span>
                           {location.name}
                         </span>
-                      {:else if preview}
-                        <span class="text-xs truncate" style="color: var(--clr-subtle, #57564f);">{preview}</span>
+                      {:else if hasActivities}
+                        <!-- Day summary: wijk · activiteiten -->
+                        <span class="text-xs truncate" style="color: var(--clr-subtle, #8b8a84);">{summary}</span>
                       {:else}
-                        <!-- Empty day: muted placeholder -->
-                        <span class="text-xs" style="color: #c8c5bf; font-style: italic;">
-                          Nog niets gepland
-                        </span>
+                        <!-- No activities yet -->
+                        <span class="text-xs" style="color: #c5c2bc; font-style: italic;">Nog niets gepland</span>
                       {/if}
                     </div>
                     <svg
                       class="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      style="color: {rowBorderColor};"
+                      style="color: {cityColor(location.color)};"
                       viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
                     >
                       <path d="M5 2.5l4.5 4.5L5 11.5"/>
@@ -628,6 +660,24 @@
               </div>
             {/if}
           {/if}
+
+          <!-- Gap block: unassigned days between this city and the next -->
+          {#if location && nextLocation && location.endDate < nextLocation.startDate}
+            <div style="margin-left: 4px; margin-top: 2px;">
+              {#each gapDays(location.endDate, nextLocation.startDate) as gapDate}
+                <div
+                  class="flex items-center gap-3 px-4 py-2.5 rounded-r-xl"
+                  style="border-left: 3px dashed #d4d1c8; margin-bottom: 1px;"
+                >
+                  <span class="text-xs tabular-nums flex-shrink-0" style="color: #c5c2bc; min-width: 80px;">
+                    {formatDayRow(gapDate)}
+                  </span>
+                  <span class="text-xs" style="color: #d4d1c8; font-style: italic;">Geen stad gepland</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
         </div>
       {/each}
     </div>

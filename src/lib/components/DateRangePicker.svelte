@@ -117,8 +117,8 @@
   }
 
   function cellBg(ds: string): string {
-    if (isStart(ds) || isEnd(ds)) return '#0d9488';
-    if (isInRange(ds) || isHovered(ds)) return 'transparent'; // wrapper handles range bg
+    if (isStart(ds) || isEnd(ds) || isInRange(ds)) return '#0d9488';
+    if (isHovered(ds)) return 'transparent'; // wrapper handles hover bg
     return 'transparent';
   }
 
@@ -140,8 +140,7 @@
   }
 
   function cellColor(ds: string): string {
-    if (isStart(ds) || isEnd(ds)) return 'white';
-    if (isInRange(ds)) return '#0f766e';
+    if (isStart(ds) || isEnd(ds) || isInRange(ds)) return 'white';
     if (ds === todayStr) return '#0d9488';
     if (isOccupied(ds)) return '#9b9895';
     return '#1a1917';
