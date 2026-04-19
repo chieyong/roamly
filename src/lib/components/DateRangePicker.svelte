@@ -4,11 +4,14 @@
    * Gebruik: <DateRangePicker bind:startDate={...} bind:endDate={...} />
    */
   let {
-    startDate = $bindable(''),
-    endDate   = $bindable(''),
+    startDate      = $bindable(''),
+    endDate        = $bindable(''),
+    occupiedRanges = [],
   }: {
-    startDate: string;
-    endDate:   string;
+    startDate:       string;
+    endDate:         string;
+    /** Date ranges already claimed by other cities — shown with a subtle background. */
+    occupiedRanges?: Array<{ start: string; end: string }>;
   } = $props();
 
   const MONTHS = ['Januari','Februari','Maart','April','Mei','Juni',
@@ -66,6 +69,10 @@
     return ds > startDate && ds < effectiveEnd;
   }
   function isHovered(ds: string) { return ds === hoverDate && startDate && !endDate; }
+  /** Is this date inside another city's planned range? */
+  function isOccupied(ds: string) {
+    return occupiedRanges.some(r => ds >= r.start && ds < r.end);
+  }
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -117,6 +124,8 @@
 
   function wrapperBg(ds: string): string {
     if (isInRange(ds)) return '#ccfbf1';
+    // Occupied by another city: warm beige tint
+    if (isOccupied(ds) && !isStart(ds) && !isEnd(ds)) return '#f5f0e8';
     return 'transparent';
   }
 
@@ -124,7 +133,14 @@
     if (isStart(ds) || isEnd(ds)) return 'white';
     if (isInRange(ds)) return '#0f766e';
     if (ds === todayStr) return '#0d9488';
+    if (isOccupied(ds)) return '#9b9895';
     return '#1a1917';
+  }
+
+  function cellTitle(ds: string): string {
+    if (!isOccupied(ds)) return '';
+    const r = occupiedRanges.find(r => ds >= r.start && ds < r.end);
+    return r ? 'Al ingepland' : '';
   }
 </script>
 
@@ -193,6 +209,7 @@
             onclick={() => clickDay(ds)}
             onmouseenter={() => { if (startDate && !endDate) hoverDate = ds; }}
             onmouseleave={() => { hoverDate = ''; }}
+            title={cellTitle(ds)}
             style="
               width: 30px; height: 30px;
               border-radius: 50%;

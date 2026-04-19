@@ -148,6 +148,13 @@
 
   // ── Inline edit/delete city ──────────────────────────────────────────────────
 
+  /** Occupied date ranges for the DateRangePicker — all OTHER cities' ranges. */
+  const occupiedRanges = $derived(
+    $locations
+      .filter(l => l.id !== editingLocationId)   // exclude city being edited
+      .map(l => ({ start: l.startDate, end: l.endDate }))
+  );
+
   let editingLocationId  = $state<string | null>(null);
   let deletingLocationId = $state<string | null>(null);
 
@@ -199,11 +206,20 @@
     deletingLocationId = null;
   }
 
-  // ── Drag-to-reorder cities (issue 3) ─────────────────────────────────────────
+  // ── Drag-to-reorder cities ────────────────────────────────────────────────────
 
   type CityCard = { id: string; name: string; color: string; startDate: string; endDate: string };
-  let cityCards = $state<CityCard[]>([]);
+  let cityCards      = $state<CityCard[]>([]);
   let isCityDragging = $state(false);
+  // dragDisabled prevents accidental drags while scrolling on mobile.
+  // Only the 6-dot handle pointerdown flips this to true.
+  let cityDragEnabled = $state(false);
+
+  function onCityHandlePointerDown() {
+    cityDragEnabled = true;
+    // Reset if pointer is released without a drag actually starting
+    window.addEventListener('pointerup', () => { cityDragEnabled = false; }, { once: true });
+  }
 
   // Sync cityCards from store when not actively dragging
   $effect(() => {
@@ -220,6 +236,7 @@
   }
 
   function handleCitySectionFinalize(e: CustomEvent) {
+    cityDragEnabled = false;
     const newCards: CityCard[] = e.detail.items;
 
     // Recalculate all dates: preserve each city's original duration, sequential from trip start
@@ -361,7 +378,7 @@
 
     <!-- ── City sections: DnD-sortable (issue 3) ──────────────────────────────── -->
     <div
-      use:dndzone={{ items: cityCards, type: 'planning-city', dropTargetStyle: {}, flipDurationMs: 250 }}
+      use:dndzone={{ items: cityCards, type: 'planning-city', dropTargetStyle: {}, flipDurationMs: 250, dragDisabled: !cityDragEnabled }}
       onconsider={handleCitySectionConsider}
       onfinalize={handleCitySectionFinalize}
       class="space-y-0"
@@ -389,11 +406,12 @@
 
             <!-- City header row: left side = drag handle + dot + name; right side = edit chevron -->
             <div class="flex items-center gap-1.5 mb-2 group">
-              <!-- Drag handle (only visible on hover) -->
+              <!-- Drag handle: only this element can start a city-section drag -->
               <div
+                onpointerdown={onCityHandlePointerDown}
                 class="opacity-0 group-hover:opacity-40 hover:opacity-70 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
                 title="Versleep om volgorde te wijzigen"
-                style="color: #a09e98; padding: 2px;"
+                style="color: #a09e98; padding: 2px; touch-action: none;"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
                   <circle cx="5.5" cy="4" r="1.2"/>
@@ -475,7 +493,7 @@
                 <div>
                   <label class="text-xs block mb-1.5" style="color: var(--clr-muted, #8b8a84);">Periode</label>
                   <div class="rounded-xl p-3" style="background: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0);">
-                    <DateRangePicker bind:startDate={editStart} bind:endDate={editEnd} />
+                    <DateRangePicker bind:startDate={editStart} bind:endDate={editEnd} occupiedRanges={occupiedRanges} />
                   </div>
                 </div>
                 {#if editStart && editEnd && editStart >= editEnd}
@@ -526,27 +544,40 @@
                   <button
                     onclick={() => goto(`/day/${day.id}`)}
                     class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors rounded-r-xl"
-                    style="background-color: {isTravelDay ? 'rgba(245,158,11,0.05)' : 'transparent'};"
-                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = isTravelDay ? 'rgba(245,158,11,0.10)' : cityBadge(location.color); }}
-                    onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = isTravelDay ? 'rgba(245,158,11,0.05)' : 'transparent'; }}
+                    style="background-color: transparent;"
+                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); }}
+                    onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <div class="flex items-center gap-3 min-w-0">
                       <span class="text-xs flex-shrink-0 tabular-nums" style="color: var(--clr-muted, #8b8a84); min-width: 80px;">
                         {formatDayRow(day.date)}
                       </span>
                       {#if depLoc}
-                        <span class="text-xs flex items-center gap-1.5 font-medium" style="color: #b45309;">
-                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <span class="text-xs flex items-center gap-1.5" style="color: #9b9895;">
+                          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M1 7h12M9 3l4 4-4 4"/>
                           </svg>
                           {depLoc.name}
-                          <span style="color: var(--clr-border, #c4c1bb);">→</span>
+                          <span style="color: #d4d1c8;">→</span>
                           {location.name}
                         </span>
                       {:else if preview}
                         <span class="text-xs truncate" style="color: var(--clr-subtle, #57564f);">{preview}</span>
                       {:else}
-                        <span class="text-xs italic" style="color: var(--clr-border, #c4c1bb);">Nog niets gepland</span>
+                        <!-- Placeholder block: visual cue that nothing is planned yet -->
+                        <span
+                          class="text-xs inline-flex items-center gap-1 px-2 py-0.5 rounded-md"
+                          style="
+                            border: 1.5px dashed #d4d1c8;
+                            color: #b0ada7;
+                            background: transparent;
+                          "
+                        >
+                          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M6 2v8M2 6h8"/>
+                          </svg>
+                          Activiteit toevoegen
+                        </span>
                       {/if}
                     </div>
                     <svg
@@ -570,20 +601,20 @@
                     <button
                       onclick={() => goto(`/day/${sharedDay.id}`)}
                       class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left w-full transition-colors rounded-r-xl"
-                      style="background-color: rgba(245,158,11,0.05);"
-                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(245,158,11,0.10)'; }}
-                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(245,158,11,0.05)'; }}
+                      style="background-color: transparent;"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >
                       <div class="flex items-center gap-3 min-w-0">
                         <span class="text-xs flex-shrink-0 tabular-nums" style="color: var(--clr-muted, #8b8a84); min-width: 80px;">
                           {formatDayRow(sharedDay.date)}
                         </span>
-                        <span class="text-xs flex items-center gap-1.5 font-medium" style="color: #b45309;">
-                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <span class="text-xs flex items-center gap-1.5" style="color: #9b9895;">
+                          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M1 7h12M9 3l4 4-4 4"/>
                           </svg>
                           {location.name}
-                          <span style="color: var(--clr-border, #c4c1bb);">→</span>
+                          <span style="color: #d4d1c8;">→</span>
                           {nextLocation.name}
                         </span>
                       </div>
@@ -633,7 +664,7 @@
         <div>
           <label class="text-xs block mb-1.5" style="color: var(--clr-muted, #8b8a84);">Periode</label>
           <div class="rounded-xl p-3" style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0);">
-            <DateRangePicker bind:startDate={newCityStart} bind:endDate={newCityEnd} />
+            <DateRangePicker bind:startDate={newCityStart} bind:endDate={newCityEnd} occupiedRanges={occupiedRanges} />
           </div>
         </div>
 
