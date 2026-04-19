@@ -2,10 +2,16 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { trip, daysByLocation, activities, locations, addLocation, updateLocation, removeLocation } from '$lib/stores/trip';
-  import type { Location } from '$lib/types';
+  import { flip } from 'svelte/animate';
+  import { dndzone } from 'svelte-dnd-action';
+  import { trip, days, daysByLocation, activities, locations, addLocation, updateLocation, removeLocation, deleteActivity } from '$lib/stores/trip';
+  import { draggingCityIdea } from '$lib/stores/ui';
+  import type { Activity, Location } from '$lib/types';
   import MaybeList from '$lib/components/MaybeList.svelte';
   import TripOverviewMap from '$lib/components/TripOverviewMap.svelte';
+  import DateRangePicker from '$lib/components/DateRangePicker.svelte';
+  import CityInsertionZone from '$lib/components/CityInsertionZone.svelte';
+  import CityDropOverlay   from '$lib/components/CityDropOverlay.svelte';
 
   let isDesktop = $state(false);
   let mq: MediaQueryList | undefined;
@@ -121,17 +127,6 @@
     addCityOpen = false;
   }
 
-  // Auto-advance end date on start change (reads directly from event to avoid bind timing)
-  function onStartDateChange(e: Event) {
-    const val = (e.currentTarget as HTMLInputElement).value;
-    newCityStart = val;
-    if (val && (!newCityEnd || newCityEnd <= val)) {
-      const d = new Date(val + 'T00:00:00');
-      d.setDate(d.getDate() + 1);
-      newCityEnd = localDateStr(d);
-    }
-  }
-
   const newCityValid = $derived(
     newCityName.trim().length > 0 && !!newCityStart && !!newCityEnd && newCityStart < newCityEnd
   );
@@ -175,16 +170,6 @@
     editingLocationId = null;
   }
 
-  function onEditStartChange(e: Event) {
-    const val = (e.currentTarget as HTMLInputElement).value;
-    editStart = val;
-    if (val && (!editEnd || editEnd <= val)) {
-      const d = new Date(val + 'T00:00:00');
-      d.setDate(d.getDate() + 1);
-      editEnd = localDateStr(d);
-    }
-  }
-
   const editCityValid = $derived(
     editName.trim().length > 0 && !!editStart && !!editEnd && editStart < editEnd
   );
@@ -213,12 +198,153 @@
     removeLocation(deletingLocationId);
     deletingLocationId = null;
   }
+
+  // ── Drag-to-reorder cities (issue 3) ─────────────────────────────────────────
+
+  type CityCard = { id: string; name: string; color: string; startDate: string; endDate: string };
+  let cityCards = $state<CityCard[]>([]);
+  let isCityDragging = $state(false);
+
+  // Sync cityCards from store when not actively dragging
+  $effect(() => {
+    if (!isCityDragging) {
+      cityCards = [...$locations]
+        .sort((a, b) => a.startDate.localeCompare(b.startDate))
+        .map(loc => ({ id: loc.id, name: loc.name, color: loc.color, startDate: loc.startDate, endDate: loc.endDate }));
+    }
+  });
+
+  function handleCitySectionConsider(e: CustomEvent) {
+    isCityDragging = true;
+    cityCards = e.detail.items;
+  }
+
+  function handleCitySectionFinalize(e: CustomEvent) {
+    const newCards: CityCard[] = e.detail.items;
+
+    // Recalculate all dates: preserve each city's original duration, sequential from trip start
+    let currentDate = $trip.startDate;
+    const recalculated = newCards.map(card => {
+      const origLoc = get(locations).find(l => l.id === card.id);
+      const duration = origLoc ? countDays(origLoc.startDate, origLoc.endDate) : 3;
+      const startDate = currentDate;
+      const endDateObj = new Date(startDate + 'T00:00:00');
+      endDateObj.setDate(endDateObj.getDate() + Math.max(1, duration));
+      const endDate = localDateStr(endDateObj);
+      currentDate = endDate;
+      return { ...card, startDate, endDate };
+    });
+
+    // Apply changes: update from LAST to FIRST to avoid resolveConflicts cascading incorrectly
+    const reversed = [...recalculated].reverse();
+    for (const card of reversed) {
+      const orig = get(locations).find(l => l.id === card.id);
+      if (orig && (orig.startDate !== card.startDate || orig.endDate !== card.endDate)) {
+        updateLocation({ ...orig, startDate: card.startDate, endDate: card.endDate });
+      }
+    }
+
+    isCityDragging = false;
+  }
+
+  // ── Drop city idea from Maybe List at any position ────────────────────────────
+
+  function insertCityAt(activity: Activity, beforeLocationId: string | undefined) {
+    // Activity is already deleted from maybe list by MaybeList's handleFinalize.
+    // Call again to be safe (idempotent).
+    deleteActivity(activity.id);
+
+    const sortedLocs = [...get(locations)].sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+    // Determine the start date for the new city based on its target slot
+    let startDate: string;
+    if (beforeLocationId === undefined) {
+      // Append at the end
+      const lastLoc = sortedLocs[sortedLocs.length - 1];
+      startDate = lastLoc?.endDate ?? $trip.startDate;
+    } else {
+      const idx = sortedLocs.findIndex(l => l.id === beforeLocationId);
+      if (idx === 0) {
+        // Before the first city — use the trip's start date
+        startDate = $trip.startDate;
+      } else {
+        // Between idx-1 and idx — start right after the preceding city
+        startDate = sortedLocs[idx - 1].endDate;
+      }
+    }
+
+    const endDateObj = new Date(startDate + 'T00:00:00');
+    endDateObj.setDate(endDateObj.getDate() + 3);
+    const endDate = localDateStr(endDateObj);
+
+    const color    = nextAvailableColor();
+    const newLocId = `loc-${Date.now()}`;
+
+    // addLocation internally calls resolveConflicts which cascades downstream dates.
+    addLocation({
+      id:        newLocId,
+      tripId:    get(trip).id,
+      name:      activity.title,
+      country:   '',
+      emoji:     '',
+      startDate,
+      endDate,
+      color,
+    });
+
+    // Explicit safety cascade: ensure every city after the new one has sequential dates.
+    // resolveConflicts should already handle this, but this guarantees it even for edge cases.
+    cascadeAfterInsert(newLocId);
+
+    // Open the inline edit form so the user can adjust dates if needed
+    addCityOpen        = false;
+    deletingLocationId = null;
+    editingLocationId  = newLocId;
+    editName  = activity.title;
+    editStart = startDate;
+    editEnd   = endDate;
+    editColor = color;
+  }
+
+  /**
+   * After inserting a new city, re-verify that every city AFTER it has
+   * strictly sequential dates (no overlaps). Applies corrections last→first
+   * so updateLocation's own resolveConflicts doesn't fight back.
+   */
+  function cascadeAfterInsert(newLocId: string) {
+    const sorted = [...get(locations)].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const newIdx = sorted.findIndex(l => l.id === newLocId);
+    if (newIdx === -1) return;
+
+    let cursor  = sorted[newIdx].endDate;
+    const fixes: Location[] = [];
+
+    for (let i = newIdx + 1; i < sorted.length; i++) {
+      const loc = sorted[i];
+      if (loc.startDate < cursor) {
+        const duration = Math.max(1, countDays(loc.startDate, loc.endDate));
+        const newStart  = cursor;
+        const endObj    = new Date(newStart + 'T00:00:00');
+        endObj.setDate(endObj.getDate() + duration);
+        const newEnd    = localDateStr(endObj);
+        cursor = newEnd;
+        fixes.push({ ...loc, startDate: newStart, endDate: newEnd });
+      } else {
+        cursor = loc.endDate;
+      }
+    }
+
+    // Apply last → first so each updateLocation's resolveConflicts doesn't undo the next fix
+    for (const fix of [...fixes].reverse()) {
+      updateLocation(fix);
+    }
+  }
 </script>
 
 <!-- ── Header ─────────────────────────────────────────────────────────────── -->
 <div class="mb-10">
   <h1 class="text-2xl font-semibold" style="color: var(--clr-text, #1a1917); letter-spacing: -0.02em; font-family: var(--font-header);">
-    {$trip.coverEmoji ?? '✈️'} {$trip.name}
+    {$trip.name}
   </h1>
   <p class="text-sm mt-1" style="color: var(--clr-muted, #a09e98);">
     {formatDateShort($trip.startDate)} – {formatDateShort($trip.endDate)}
@@ -231,212 +357,258 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:pb-0" style="padding-bottom: 160px;">
 
   <!-- Timeline -->
-  <div class="lg:col-span-2 space-y-8">
-    {#each $daysByLocation as { location, days } (location.id)}
-      {#if days.length > 0 || editingLocationId === location.id}
-        <div>
+  <div class="lg:col-span-2">
 
-          <!-- City header row -->
-          <div class="flex items-center gap-2 mb-2 group">
-            <div
-              class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style="background-color: {cityColor(location.color)};"
-            ></div>
-            <span class="text-xs font-semibold" style="color: var(--clr-text, #1a1917);">
-              {location.name}
-            </span>
-            <span class="text-xs" style="color: var(--clr-muted, #a09e98);">
-              {formatDateShort(location.startDate)} – {formatDateShort(location.endDate)}
-              · {days.length} {days.length === 1 ? 'dag' : 'dagen'}
-            </span>
+    <!-- ── City sections: DnD-sortable (issue 3) ──────────────────────────────── -->
+    <div
+      use:dndzone={{ items: cityCards, type: 'planning-city', dropTargetStyle: {}, flipDurationMs: 250 }}
+      onconsider={handleCitySectionConsider}
+      onfinalize={handleCitySectionFinalize}
+      class="space-y-0"
+      role="list"
+    >
+      {#each cityCards as cityCard, sectionIdx (cityCard.id)}
+        {@const location = $locations.find(l => l.id === cityCard.id)}
+        {@const locationDays = location
+          ? $days.filter(d => d.locationId === location.id).sort((a, b) => a.date.localeCompare(b.date))
+          : []}
+        {@const nextCard = cityCards[sectionIdx + 1]}
+        {@const nextLocation = nextCard ? $locations.find(l => l.id === nextCard.id) : null}
+        {@const hasTravelDay = !!(location && nextLocation && location.endDate === nextLocation.startDate)}
+        {@const displayDays = locationDays.length + (hasTravelDay ? 1 : 0)}
+        {@const displayNights = Math.max(0, locationDays.length - 1 + (hasTravelDay ? 1 : 0))}
 
-            <!-- Edit / delete buttons (appear on hover) -->
-            <div class="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onclick={() => openEditCity(location)}
-                class="w-6 h-6 flex items-center justify-center rounded-lg transition-colors"
-                style="color: {editingLocationId === location.id ? '#0d9488' : '#a09e98'};"
-                onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt, #f4f3ef)'; }}
-                onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                title="Bewerk stad"
+        <!-- position:relative lets CityDropOverlay be absolute-positioned inside -->
+        <div animate:flip={{ duration: 250 }} class="mb-8" style="position: relative;">
+
+          {#if location && (locationDays.length > 0 || editingLocationId === location.id)}
+            <!-- Full-size drop overlay: visible when dragging a city idea from Maybe List -->
+            {#if $draggingCityIdea}
+              <CityDropOverlay beforeLocationId={location.id} cityName={location.name} onInsert={insertCityAt} />
+            {/if}
+
+            <!-- City header row: left side = drag handle + dot + name; right side = edit chevron -->
+            <div class="flex items-center gap-1.5 mb-2 group">
+              <!-- Drag handle (only visible on hover) -->
+              <div
+                class="opacity-0 group-hover:opacity-40 hover:opacity-70 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
+                title="Versleep om volgorde te wijzigen"
+                style="color: #a09e98; padding: 2px;"
               >
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z"/>
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                  <circle cx="5.5" cy="4" r="1.2"/>
+                  <circle cx="5.5" cy="8" r="1.2"/>
+                  <circle cx="5.5" cy="12" r="1.2"/>
+                  <circle cx="10.5" cy="4" r="1.2"/>
+                  <circle cx="10.5" cy="8" r="1.2"/>
+                  <circle cx="10.5" cy="12" r="1.2"/>
                 </svg>
-              </button>
+              </div>
+
+              <!-- Clickable edit area -->
               <button
-                onclick={() => askDeleteCity(location.id)}
-                class="w-6 h-6 flex items-center justify-center rounded-lg transition-colors"
-                style="color: {deletingLocationId === location.id ? '#f43f5e' : '#a09e98'};"
-                onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt, #f4f3ef)'; }}
-                onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                title="Verwijder stad"
+                onclick={() => editingLocationId === location.id ? cancelEditCity() : openEditCity(location)}
+                class="flex items-center gap-2 flex-1 text-left"
+                style="background: none; border: none; cursor: pointer; padding: 2px 0;"
+                title="Klik om te bewerken of verwijderen"
               >
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 4h10M5 4V2h4v2M3 4l.7 8h6.6L11 4M5.5 6.5v3.5M8.5 6.5v3.5"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Delete confirmation -->
-          {#if deletingLocationId === location.id}
-            <div
-              class="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl"
-              style="background: #fff1f2; border: 1px solid #fecdd3;"
-            >
-              <span class="text-xs flex-1" style="color: #be123c;">
-                {location.name} verwijderen? Activiteiten gaan naar de misschien-lijst.
-              </span>
-              <button
-                onclick={confirmDeleteCity}
-                class="text-xs px-2.5 py-1 rounded-lg font-medium flex-shrink-0"
-                style="background: #f43f5e; color: white;"
-              >Verwijder</button>
-              <button
-                onclick={() => { deletingLocationId = null; }}
-                class="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
-                style="color: #a09e98; background: var(--clr-surface-alt, #f4f3ef);"
-              >Annuleer</button>
-            </div>
-          {/if}
-
-          {#if editingLocationId === location.id}
-            <!-- ── Inline edit form ── -->
-            <div
-              class="rounded-2xl p-4 space-y-3 mb-2"
-              style="border: 1.5px solid var(--clr-accent, #0d9488); background: var(--clr-accent-light, #f0fdfa);"
-            >
-              <!-- Naam -->
-              <div>
-                <label class="text-xs block mb-1" style="color: var(--clr-muted, #8b8a84);">Stadnaam</label>
-                <input
-                  type="text"
-                  bind:value={editName}
-                  placeholder="bijv. Nara"
-                  class="w-full text-sm rounded-xl px-3 py-2 outline-none"
-                  style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
-                />
-              </div>
-
-              <!-- Datums -->
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="text-xs block mb-1" style="color: var(--clr-muted, #8b8a84);">Aankomst</label>
-                  <input
-                    type="date"
-                    value={editStart}
-                    oninput={onEditStartChange}
-                    onchange={onEditStartChange}
-                    class="w-full text-xs rounded-xl px-3 py-2 outline-none"
-                    style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
-                  />
-                </div>
-                <div>
-                  <label class="text-xs block mb-1" style="color: var(--clr-muted, #8b8a84);">Vertrek</label>
-                  <input
-                    type="date"
-                    bind:value={editEnd}
-                    class="w-full text-xs rounded-xl px-3 py-2 outline-none"
-                    style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
-                  />
-                </div>
-              </div>
-
-              {#if editStart && editEnd && editStart < editEnd}
-                <p class="text-xs" style="color: var(--clr-accent, #0d9488);">
-                  {countDays(editStart, editEnd)} {countDays(editStart, editEnd) === 1 ? 'dag' : 'dagen'} gegenereerd
-                </p>
-              {:else if editStart && editEnd && editStart >= editEnd}
-                <p class="text-xs" style="color: #f43f5e;">Vertrekdatum moet na aankomst liggen</p>
-              {/if}
-
-              <!-- Kleur -->
-              <div>
-                <p class="text-xs mb-1.5" style="color: var(--clr-muted, #8b8a84);">Kleur</p>
-                <div class="flex gap-2">
-                  {#each colorOptions as opt}
-                    <button
-                      onclick={() => { editColor = opt.cls; }}
-                      class="w-7 h-7 rounded-full transition-all"
-                      style="background: {opt.hex}; border: 2.5px solid {editColor === opt.cls ? '#1a1917' : 'transparent'}; box-shadow: {editColor === opt.cls ? '0 0 0 1px white inset' : 'none'};"
-                      aria-label={opt.cls}
-                    ></button>
-                  {/each}
-                </div>
-              </div>
-
-              <!-- Knoppen -->
-              <div class="flex gap-2">
-                <button
-                  onclick={saveEditCity}
-                  disabled={!editCityValid}
-                  class="flex-1 text-xs py-2 rounded-xl font-medium transition-all"
-                  style="background-color: {editCityValid ? '#0d9488' : '#d4d1c8'}; color: white;"
-                >Opslaan</button>
-                <button
-                  onclick={cancelEditCity}
-                  class="text-xs px-4 py-2 rounded-xl"
-                  style="color: var(--clr-muted, #8b8a84); background: var(--clr-surface-alt, #f4f3ef);"
-                >Annuleren</button>
-              </div>
-            </div>
-          {:else}
-            <!-- ── Day rows ── -->
-            <div class="flex flex-col" style="border-left: 3px solid {cityColor(location.color)}; margin-left: 4px;">
-              {#each days as day, i}
-                {@const preview = topActivity(day.id)}
-                {@const depLoc = day.departureLocationId ? $locations.find(l => l.id === day.departureLocationId) : null}
-                <button
-                  onclick={() => goto(`/day/${day.id}`)}
-                  class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors rounded-r-xl"
-                  style="background-color: transparent;"
-                  onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); }}
-                  onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                <div
+                  class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style="background-color: {cityColor(location.color)};"
+                ></div>
+                <span class="text-xs font-semibold" style="color: var(--clr-text, #1a1917);">
+                  {location.name}
+                </span>
+                <span class="text-xs" style="color: var(--clr-muted, #a09e98);">
+                  {formatDateShort(location.startDate)} – {formatDateShort(location.endDate)}
+                  · {displayDays} {displayDays === 1 ? 'dag' : 'dagen'}
+                  · {displayNights} {displayNights === 1 ? 'overnachting' : 'overnachtingen'}
+                </span>
+                <svg
+                  class="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity"
+                  width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#8b8a84" stroke-width="1.5"
+                  style="transform: {editingLocationId === location.id ? 'rotate(180deg)' : 'rotate(0deg)'}; transition: transform 0.2s;"
                 >
-                  <div class="flex items-baseline gap-3 min-w-0">
-                    <!-- Date -->
-                    <span
-                      class="text-xs flex-shrink-0 tabular-nums"
-                      style="color: var(--clr-muted, #8b8a84); min-width: 80px;"
-                    >
-                      {formatDayRow(day.date)}
-                    </span>
-
-                    {#if depLoc}
-                      <!-- Reisdag indicator -->
-                      <span class="text-xs flex-shrink-0 flex items-center gap-1" style="color: var(--clr-muted, #a09e98);">
-                        <span>🚄</span>
-                        <span>van {depLoc.name}</span>
-                      </span>
-                    {:else if preview}
-                      <span class="text-xs truncate" style="color: var(--clr-subtle, #57564f);">{preview}</span>
-                    {:else}
-                      <span class="text-xs italic" style="color: var(--clr-border, #c4c1bb);">Nog niets gepland</span>
-                    {/if}
-                  </div>
-
-                  <!-- Arrow -->
-                  <svg
-                    class="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    style="color: {cityColor(location.color)};"
-                    viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
-                  >
-                    <path d="M5 2.5l4.5 4.5L5 11.5"/>
-                  </svg>
-                </button>
-
-                <!-- Subtle divider between days (not after last) -->
-                {#if i < days.length - 1}
-                  <div style="height: 1px; margin-left: 16px; background-color: var(--clr-border-light, #f0eeea);"></div>
-                {/if}
-              {/each}
+                  <path d="M2 4l4 4 4-4"/>
+                </svg>
+              </button>
             </div>
-          {/if}
 
+            <!-- Delete confirmation -->
+            {#if deletingLocationId === location.id}
+              <div
+                class="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl"
+                style="background: #fff1f2; border: 1px solid #fecdd3;"
+              >
+                <span class="text-xs flex-1" style="color: #be123c;">
+                  {location.name} verwijderen? Activiteiten gaan naar de misschien-lijst.
+                </span>
+                <button
+                  onclick={confirmDeleteCity}
+                  class="text-xs px-2.5 py-1 rounded-lg font-medium flex-shrink-0"
+                  style="background: #f43f5e; color: white;"
+                >Verwijder</button>
+                <button
+                  onclick={() => { deletingLocationId = null; }}
+                  class="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
+                  style="color: #a09e98; background: var(--clr-surface-alt, #f4f3ef);"
+                >Annuleer</button>
+              </div>
+            {/if}
+
+            {#if editingLocationId === location.id}
+              <!-- Inline edit form -->
+              <div
+                class="rounded-2xl p-4 space-y-3 mb-2"
+                style="border: 1.5px solid var(--clr-accent, #0d9488); background: var(--clr-accent-light, #f0fdfa);"
+              >
+                <div>
+                  <label class="text-xs block mb-1" style="color: var(--clr-muted, #8b8a84);">Stadnaam</label>
+                  <input
+                    type="text"
+                    bind:value={editName}
+                    placeholder="bijv. Nara"
+                    class="w-full text-sm rounded-xl px-3 py-2 outline-none"
+                    style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
+                  />
+                </div>
+                <div>
+                  <label class="text-xs block mb-1.5" style="color: var(--clr-muted, #8b8a84);">Periode</label>
+                  <div class="rounded-xl p-3" style="background: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0);">
+                    <DateRangePicker bind:startDate={editStart} bind:endDate={editEnd} />
+                  </div>
+                </div>
+                {#if editStart && editEnd && editStart >= editEnd}
+                  <p class="text-xs" style="color: #f43f5e;">Vertrekdatum moet na aankomst liggen</p>
+                {/if}
+                <div>
+                  <p class="text-xs mb-1.5" style="color: var(--clr-muted, #8b8a84);">Kleur</p>
+                  <div class="flex gap-2">
+                    {#each colorOptions as opt}
+                      <button
+                        onclick={() => { editColor = opt.cls; }}
+                        class="w-7 h-7 rounded-full transition-all"
+                        style="background: {opt.hex}; border: 2.5px solid {editColor === opt.cls ? '#1a1917' : 'transparent'}; box-shadow: {editColor === opt.cls ? '0 0 0 1px white inset' : 'none'};"
+                        aria-label={opt.cls}
+                      ></button>
+                    {/each}
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    onclick={saveEditCity}
+                    disabled={!editCityValid}
+                    class="flex-1 text-xs py-2 rounded-xl font-medium transition-all"
+                    style="background-color: {editCityValid ? '#0d9488' : '#d4d1c8'}; color: white;"
+                  >Opslaan</button>
+                  <button
+                    onclick={cancelEditCity}
+                    class="text-xs px-4 py-2 rounded-xl"
+                    style="color: var(--clr-muted, #8b8a84); background: var(--clr-surface-alt, #f4f3ef);"
+                  >Annuleren</button>
+                  <button
+                    onclick={() => askDeleteCity(location.id)}
+                    class="text-xs px-3 py-2 rounded-xl"
+                    style="color: #f43f5e; background: #fff1f2;"
+                    title="Verwijder bestemming"
+                  >🗑</button>
+                </div>
+              </div>
+            {:else}
+              {@const travelDay = hasTravelDay && nextLocation ? $days.find(d => d.id === `day-${location.id}-${nextLocation.startDate}`) ?? null : null}
+
+              <!-- Day rows -->
+              <div class="flex flex-col" style="border-left: 3px solid {cityColor(location.color)}; margin-left: 4px;">
+                {#each locationDays as day, i}
+                  {@const preview = topActivity(day.id)}
+                  {@const depLoc = day.departureLocationId ? $locations.find(l => l.id === day.departureLocationId) : null}
+                  {@const isTravelDay = !!depLoc}
+                  <button
+                    onclick={() => goto(`/day/${day.id}`)}
+                    class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors rounded-r-xl"
+                    style="background-color: {isTravelDay ? 'rgba(245,158,11,0.05)' : 'transparent'};"
+                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = isTravelDay ? 'rgba(245,158,11,0.10)' : cityBadge(location.color); }}
+                    onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = isTravelDay ? 'rgba(245,158,11,0.05)' : 'transparent'; }}
+                  >
+                    <div class="flex items-center gap-3 min-w-0">
+                      <span class="text-xs flex-shrink-0 tabular-nums" style="color: var(--clr-muted, #8b8a84); min-width: 80px;">
+                        {formatDayRow(day.date)}
+                      </span>
+                      {#if depLoc}
+                        <span class="text-xs flex items-center gap-1.5 font-medium" style="color: #b45309;">
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 7h12M9 3l4 4-4 4"/>
+                          </svg>
+                          {depLoc.name}
+                          <span style="color: var(--clr-border, #c4c1bb);">→</span>
+                          {location.name}
+                        </span>
+                      {:else if preview}
+                        <span class="text-xs truncate" style="color: var(--clr-subtle, #57564f);">{preview}</span>
+                      {:else}
+                        <span class="text-xs italic" style="color: var(--clr-border, #c4c1bb);">Nog niets gepland</span>
+                      {/if}
+                    </div>
+                    <svg
+                      class="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style="color: {cityColor(location.color)};"
+                      viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
+                    >
+                      <path d="M5 2.5l4.5 4.5L5 11.5"/>
+                    </svg>
+                  </button>
+                  {#if i < locationDays.length - 1}
+                    <div style="height: 1px; margin-left: 16px; background-color: var(--clr-border-light, #f0eeea);"></div>
+                  {/if}
+                {/each}
+
+                <!-- Travel departure row (shared day between Stad A → Stad B) -->
+                {#if hasTravelDay && nextLocation}
+                  {@const sharedDay = $days.find(d => d.locationId === nextLocation.id && d.date === nextLocation.startDate)}
+                  {#if sharedDay}
+                    <div style="height: 1px; margin-left: 16px; background: repeating-linear-gradient(90deg, #f0eeea 0px, #f0eeea 4px, transparent 4px, transparent 8px);"></div>
+                    <button
+                      onclick={() => goto(`/day/${sharedDay.id}`)}
+                      class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left w-full transition-colors rounded-r-xl"
+                      style="background-color: rgba(245,158,11,0.05);"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(245,158,11,0.10)'; }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(245,158,11,0.05)'; }}
+                    >
+                      <div class="flex items-center gap-3 min-w-0">
+                        <span class="text-xs flex-shrink-0 tabular-nums" style="color: var(--clr-muted, #8b8a84); min-width: 80px;">
+                          {formatDayRow(sharedDay.date)}
+                        </span>
+                        <span class="text-xs flex items-center gap-1.5 font-medium" style="color: #b45309;">
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 7h12M9 3l4 4-4 4"/>
+                          </svg>
+                          {location.name}
+                          <span style="color: var(--clr-border, #c4c1bb);">→</span>
+                          {nextLocation.name}
+                        </span>
+                      </div>
+                      <svg
+                        class="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        style="color: {cityColor(location.color)};"
+                        viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
+                      >
+                        <path d="M5 2.5l4.5 4.5L5 11.5"/>
+                      </svg>
+                    </button>
+                  {/if}
+                {/if}
+              </div>
+            {/if}
+          {/if}
         </div>
-      {/if}
-    {/each}
+      {/each}
+    </div>
+    <!-- End DnD sortable city list -->
+
+    <!-- Insertion zone at the very end (issue 2) -->
+    {#if $draggingCityIdea}
+      <CityInsertionZone onInsert={insertCityAt} />
+    {/if}
 
     <!-- ── Inline "Stad toevoegen" ──────────────────────────────────────────── -->
     {#if addCityOpen}
@@ -457,35 +629,15 @@
           />
         </div>
 
-        <!-- Datums -->
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-xs block mb-1" style="color: var(--clr-muted, #8b8a84);">Aankomst</label>
-            <input
-              type="date"
-              value={newCityStart}
-              oninput={onStartDateChange}
-              onchange={onStartDateChange}
-              class="w-full text-xs rounded-xl px-3 py-2 outline-none"
-              style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
-            />
-          </div>
-          <div>
-            <label class="text-xs block mb-1" style="color: var(--clr-muted, #8b8a84);">Vertrek</label>
-            <input
-              type="date"
-              bind:value={newCityEnd}
-              class="w-full text-xs rounded-xl px-3 py-2 outline-none"
-              style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
-            />
+        <!-- Periode (kalender) -->
+        <div>
+          <label class="text-xs block mb-1.5" style="color: var(--clr-muted, #8b8a84);">Periode</label>
+          <div class="rounded-xl p-3" style="background-color: var(--clr-surface, white); border: 1.5px solid var(--clr-border, #e8e6e0);">
+            <DateRangePicker bind:startDate={newCityStart} bind:endDate={newCityEnd} />
           </div>
         </div>
 
-        {#if newCityStart && newCityEnd && newCityStart < newCityEnd}
-          <p class="text-xs" style="color: var(--clr-accent, #0d9488);">
-            {countDays(newCityStart, newCityEnd)} {countDays(newCityStart, newCityEnd) === 1 ? 'dag' : 'dagen'} gegenereerd
-          </p>
-        {:else if newCityStart && newCityEnd && newCityStart >= newCityEnd}
+        {#if newCityStart && newCityEnd && newCityStart >= newCityEnd}
           <p class="text-xs" style="color: #f43f5e;">Vertrekdatum moet na aankomst liggen</p>
         {/if}
 

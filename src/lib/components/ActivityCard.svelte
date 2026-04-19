@@ -26,11 +26,40 @@
     return null;
   });
 
+  // ── Inline field editing (time / duration) ────────────────────────────────
+  // Allows clicking the time or duration badge directly — without opening the full edit form.
+  let inlineField = $state<'time' | 'duration' | null>(null);
+  let inlineValue = $state('');
+
+  function startInlineEdit(field: 'time' | 'duration', e: MouseEvent) {
+    e.stopPropagation();
+    // Close any full edit form open for this card
+    if ($editingActivityId === activity.id) editingActivityId.set(null);
+    inlineField = field;
+    inlineValue = field === 'time' ? (activity.time ?? '') : (activity.duration ?? '');
+  }
+
+  function saveInlineEdit() {
+    if (inlineField === 'time') {
+      updateActivity({ ...activity, time: inlineValue.trim() || undefined });
+    } else if (inlineField === 'duration') {
+      updateActivity({ ...activity, duration: inlineValue.trim() || undefined });
+    }
+    inlineField = null;
+  }
+
+  function handleInlineKeydown(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); saveInlineEdit(); }
+    if (e.key === 'Escape') { inlineField = null; }
+  }
+
   // ── Edit form state ───────────────────────────────────────────────────────
   let editTitle    = $state('');
   let editNotes    = $state('');
   let editTime     = $state('');
   let editLocation = $state('');
+  let editDuration = $state('');
 
   // ── Contextual image via Unsplash keyword search ─────────────────────────
   function getImageQuery(title: string, loc: string | undefined): string {
@@ -91,7 +120,9 @@
     editNotes    = activity.notes ?? '';
     editTime     = activity.time ?? '';
     editLocation = activity.location ?? '';
+    editDuration = activity.duration ?? '';
     chatOpen = false;
+    inlineField = null;
     expandedActivityId.set(null);
     editingActivityId.set(activity.id);
   }
@@ -103,6 +134,7 @@
       notes:    editNotes.trim()    || undefined,
       time:     editTime.trim()     || undefined,
       location: editLocation.trim() || undefined,
+      duration: editDuration.trim() || undefined,
     });
     editingActivityId.set(null);
   }
@@ -118,6 +150,7 @@
 
   function toggleExpand() {
     if (isDragging) return;
+    if (inlineField) { inlineField = null; return; }
     editingActivityId.set(null);
     const opening = $expandedActivityId !== activity.id;
     if (!opening) chatOpen = false; // reset chat when closing card
@@ -132,7 +165,7 @@
 </script>
 
 <div
-  class="relative transition-all duration-200 {isDragging ? 'opacity-40 scale-[0.98]' : ''}"
+  class="group relative transition-all duration-200 {isDragging ? 'opacity-40 scale-[0.98]' : ''}"
   role="listitem"
 >
   {#if editing}
@@ -155,6 +188,13 @@
           onkeydown={handleKeydown}
           placeholder="9:00 AM"
           class="w-28 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
+          style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
+        />
+        <input
+          bind:value={editDuration}
+          onkeydown={handleKeydown}
+          placeholder="bijv. 1.5u"
+          class="w-24 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
           style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
         />
         <input
@@ -189,27 +229,122 @@
 
   {:else}
     <!-- ── Collapsed card ─────────────────────────────────────────────────── -->
-    <button
+    <!--
+      Using div[role=button] instead of <button> so we can embed interactive
+      time/duration inputs without violating the interactive-content-in-button rule.
+    -->
+    <div
+      role="button"
+      tabindex="0"
       onclick={toggleExpand}
-      class="w-full text-left rounded-2xl px-4 py-3 transition-all duration-150 cursor-pointer"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(); } }}
+      class="w-full text-left rounded-2xl px-4 py-3 transition-all duration-150 cursor-pointer select-none"
       style="background-color: var(--clr-surface, white);
              border: 1px solid {expanded ? '#c4f1ea' : 'var(--clr-border, #ece9e4)'};
              {expanded ? 'border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent;' : ''}"
     >
+      <!-- Row 1: title + inline-editable time -->
       <div class="flex items-baseline justify-between gap-3">
         <span class="text-sm font-medium leading-snug flex-1 min-w-0 truncate" style="color: #1a1917;">
           {activity.title}
         </span>
-        {#if activity.time}
-          <span class="text-xs font-medium flex-shrink-0 tabular-nums" style="color: #0d9488;">
+
+        <!-- Inline time editor -->
+        {#if inlineField === 'time'}
+          <input
+            bind:value={inlineValue}
+            onblur={saveInlineEdit}
+            onkeydown={handleInlineKeydown}
+            use:focusEl
+            onclick={(e) => e.stopPropagation()}
+            placeholder="9:00 AM"
+            class="text-xs font-medium tabular-nums w-22 text-center rounded-lg px-2 py-0.5 focus:outline-none flex-shrink-0"
+            style="color: #0d9488; background: #f0fdfa; border: 1px solid #a7f3d0; min-width: 72px;"
+          />
+        {:else if activity.time}
+          <span
+            role="button"
+            tabindex="0"
+            class="text-xs font-medium flex-shrink-0 tabular-nums rounded-lg px-1.5 py-0.5 cursor-pointer transition-colors"
+            style="color: #0d9488;"
+            onclick={(e) => startInlineEdit('time', e)}
+            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('time', e as unknown as MouseEvent); }}
+            title="Klik om starttijd aan te passen"
+            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f0fdfa'; }}
+            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
             {activity.time}
+          </span>
+        {:else if !isDragging}
+          <!-- Subtle "+ tijd" hint, only visible on hover -->
+          <span
+            role="button"
+            tabindex="0"
+            class="text-xs flex-shrink-0 rounded-lg px-1.5 py-0.5 cursor-pointer transition-all opacity-0 group-hover:opacity-100"
+            style="color: #c4bfb9;"
+            onclick={(e) => startInlineEdit('time', e)}
+            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('time', e as unknown as MouseEvent); }}
+            title="Starttijd toevoegen"
+            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.color = '#0d9488'; }}
+            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.color = '#c4bfb9'; }}
+          >
+            + tijd
           </span>
         {/if}
       </div>
-      {#if subline()}
-        <p class="text-xs mt-0.5 truncate" style="color: #a09e98;">{subline()}</p>
-      {/if}
-    </button>
+
+      <!-- Row 2: subline + inline-editable duration -->
+      <div class="flex items-center justify-between gap-2 mt-0.5">
+        {#if subline()}
+          <p class="text-xs truncate flex-1" style="color: #a09e98;">{subline()}</p>
+        {:else}
+          <span class="flex-1"></span>
+        {/if}
+
+        <!-- Inline duration editor -->
+        {#if inlineField === 'duration'}
+          <input
+            bind:value={inlineValue}
+            onblur={saveInlineEdit}
+            onkeydown={handleInlineKeydown}
+            use:focusEl
+            onclick={(e) => e.stopPropagation()}
+            placeholder="bijv. 2u"
+            class="text-xs w-16 text-center rounded-lg px-2 py-0.5 focus:outline-none flex-shrink-0"
+            style="color: #a09e98; background: #f4f3ef; border: 1px solid #e8e6e0;"
+          />
+        {:else if activity.duration}
+          <span
+            role="button"
+            tabindex="0"
+            class="text-xs flex-shrink-0 rounded-lg px-1.5 py-0.5 cursor-pointer transition-colors"
+            style="color: #a09e98;"
+            onclick={(e) => startInlineEdit('duration', e)}
+            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('duration', e as unknown as MouseEvent); }}
+            title="Klik om duur aan te passen"
+            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            ⏱ {activity.duration}
+          </span>
+        {:else if !isDragging}
+          <!-- Subtle "+ duur" hint, only visible on hover -->
+          <span
+            role="button"
+            tabindex="0"
+            class="text-xs flex-shrink-0 rounded-lg px-1.5 py-0.5 cursor-pointer transition-all opacity-0 group-hover:opacity-100"
+            style="color: #c4bfb9;"
+            onclick={(e) => startInlineEdit('duration', e)}
+            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('duration', e as unknown as MouseEvent); }}
+            title="Duur toevoegen"
+            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.color = '#a09e98'; }}
+            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.color = '#c4bfb9'; }}
+          >
+            + duur
+          </span>
+        {/if}
+      </div>
+    </div>
 
     <!-- ── Expanded drawer ────────────────────────────────────────────────── -->
     {#if expanded}
@@ -237,9 +372,6 @@
                 <p class="text-xs leading-relaxed line-clamp-3" style="color: #57564f;">{activity.notes}</p>
               {:else}
                 <p class="text-xs italic" style="color: #b0ada7;">Nog geen omschrijving.</p>
-              {/if}
-              {#if activity.duration}
-                <span class="text-xs" style="color: #a09e98;">⏱ {activity.duration}</span>
               {/if}
             </div>
           </div>

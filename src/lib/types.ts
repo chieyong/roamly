@@ -38,6 +38,7 @@ export interface Activity {
   time?: string;        // e.g. "9:30 AM"
   notes?: string;
   location?: string;    // e.g. "Shibuya, Tokyo"
+  locationId?: string;  // city tag for maybe-section items (links to Location.id)
   order: number;
   emoji?: string;
   duration?: string;    // e.g. "2h"

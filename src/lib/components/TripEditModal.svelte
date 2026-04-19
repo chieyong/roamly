@@ -2,6 +2,7 @@
   import { trip, locations, updateTrip, addLocation, updateLocation, removeLocation } from '$lib/stores/trip';
   import { get } from 'svelte/store';
   import type { Location } from '$lib/types';
+  import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -10,16 +11,13 @@
   let activeTab = $state<Tab>('reis');
 
   // ── Reis tab ──────────────────────────────────────────────────────────────
-  let tripName      = $state(get(trip).name);
-  let tripEmoji     = $state(get(trip).coverEmoji ?? '✈️');
-  let tripStart     = $state(get(trip).startDate);
-  let tripEnd       = $state(get(trip).endDate);
-
-  const tripEmojis = ['✈️','🌸','🗾','🏯','🗻','🌊','🏖️','🏔️','🌴','🎌','🚂','🍜','🎋','🦋','🌺'];
+  let tripName  = $state(get(trip).name);
+  let tripStart = $state(get(trip).startDate);
+  let tripEnd   = $state(get(trip).endDate);
 
   function saveTrip() {
     if (!tripName.trim()) return;
-    updateTrip({ name: tripName.trim(), coverEmoji: tripEmoji, startDate: tripStart, endDate: tripEnd });
+    updateTrip({ name: tripName.trim(), startDate: tripStart, endDate: tripEnd });
     onClose();
   }
 
@@ -70,17 +68,6 @@
     const mo = String(d.getMonth() + 1).padStart(2, '0');
     const dy = String(d.getDate()).padStart(2, '0');
     return `${y}-${mo}-${dy}`;
-  }
-
-  // Auto-advance end date on start change (read from event to avoid bind timing issues)
-  function onFormStartChange(e: Event) {
-    const val = (e.currentTarget as HTMLInputElement).value;
-    formStart = val;
-    if (val && (!formEnd || formEnd <= val)) {
-      const d = new Date(val + 'T00:00:00');
-      d.setDate(d.getDate() + 1);
-      formEnd = localDateStr(d);
-    }
   }
 
   function startAdd() {
@@ -155,7 +142,7 @@
       if (loc.id === savedId) continue; // the one the user just edited — skip
       if (prev.startDate !== loc.startDate || prev.endDate !== loc.endDate) {
         const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
-        shifted.push(`${loc.emoji} ${loc.name}: ${fmt(loc.startDate)} – ${fmt(loc.endDate)}`);
+        shifted.push(`${loc.name}: ${fmt(loc.startDate)} – ${fmt(loc.endDate)}`);
       }
     }
     shiftedNames = shifted;
@@ -218,20 +205,6 @@
       {#if activeTab === 'reis'}
         <!-- ── Reis tab ──────────────────────────────────────────────────── -->
 
-        <!-- Emoji picker -->
-        <div>
-          <p class="text-xs mb-2" style="color: #8b8a84;">Emoji</p>
-          <div class="flex flex-wrap gap-1.5">
-            {#each tripEmojis as e}
-              <button
-                onclick={() => { tripEmoji = e; }}
-                class="text-lg w-9 h-9 rounded-xl flex items-center justify-center transition-all"
-                style="background-color: {tripEmoji === e ? '#f0fdfa' : '#f4f3ef'}; border: 1.5px solid {tripEmoji === e ? '#0d9488' : 'transparent'};"
-              >{e}</button>
-            {/each}
-          </div>
-        </div>
-
         <!-- Naam -->
         <div>
           <label class="text-xs block mb-1.5" style="color: #8b8a84;">Naam</label>
@@ -244,17 +217,11 @@
           />
         </div>
 
-        <!-- Datums -->
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs block mb-1.5" style="color: #8b8a84;">Startdatum</label>
-            <input type="date" bind:value={tripStart} class="w-full text-xs rounded-2xl px-3 py-2.5 outline-none"
-              style="background-color: #f4f3ef; border: 1.5px solid #e8e6e0; color: #1a1917;" />
-          </div>
-          <div>
-            <label class="text-xs block mb-1.5" style="color: #8b8a84;">Einddatum</label>
-            <input type="date" bind:value={tripEnd} class="w-full text-xs rounded-2xl px-3 py-2.5 outline-none"
-              style="background-color: #f4f3ef; border: 1.5px solid #e8e6e0; color: #1a1917;" />
+        <!-- Periode (kalender) -->
+        <div>
+          <label class="text-xs block mb-1.5" style="color: #8b8a84;">Periode</label>
+          <div class="rounded-2xl p-3" style="background-color: #f4f3ef; border: 1.5px solid #e8e6e0;">
+            <DateRangePicker bind:startDate={tripStart} bind:endDate={tripEnd} />
           </div>
         </div>
 
@@ -363,29 +330,15 @@
     />
   </div>
 
-  <!-- Datums -->
-  <div class="grid grid-cols-2 gap-2">
-    <div>
-      <label class="text-xs block mb-1" style="color: #8b8a84;">Aankomst</label>
-      <input type="date"
-        value={formStart}
-        oninput={onFormStartChange}
-        onchange={onFormStartChange}
-        class="w-full text-xs rounded-xl px-3 py-2 outline-none"
-        style="background-color: white; border: 1.5px solid #e8e6e0; color: #1a1917;" />
-    </div>
-    <div>
-      <label class="text-xs block mb-1" style="color: #8b8a84;">Vertrek</label>
-      <input type="date" bind:value={formEnd} class="w-full text-xs rounded-xl px-3 py-2 outline-none"
-        style="background-color: white; border: 1.5px solid #e8e6e0; color: #1a1917;" />
+  <!-- Periode (kalender) -->
+  <div>
+    <label class="text-xs block mb-1" style="color: #8b8a84;">Periode</label>
+    <div class="rounded-xl p-3" style="background-color: white; border: 1.5px solid #e8e6e0;">
+      <DateRangePicker bind:startDate={formStart} bind:endDate={formEnd} />
     </div>
   </div>
 
-  {#if formStart && formEnd && formStart < formEnd}
-    <p class="text-xs" style="color: #0d9488;">
-      {countDays(formStart, formEnd)} {countDays(formStart, formEnd) === 1 ? 'dag' : 'dagen'} gegenereerd
-    </p>
-  {:else if formStart && formEnd && formStart >= formEnd}
+  {#if formStart && formEnd && formStart >= formEnd}
     <p class="text-xs" style="color: #f43f5e;">Vertrekdatum moet na aankomst liggen</p>
   {/if}
 

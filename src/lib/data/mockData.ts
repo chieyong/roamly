@@ -95,9 +95,13 @@ export const mockActivities: Activity[] = [
   { id: 'act-11', dayId: 'day-3', section: 'afternoon', title: 'Akihabara electronics',    time: '2:00 PM',  notes: 'Yodobashi Camera, arcades, anime shops',              location: 'Akihabara',   order: 0, emoji: '🎮', duration: '2h' },
   { id: 'act-12', dayId: 'day-3', section: 'evening',   title: 'Kanda Yabu Soba',          time: '6:30 PM',  notes: 'Historic soba restaurant, since 1880',                location: 'Kanda',       order: 0, emoji: '🍝', duration: '1h' },
 
-  // Maybe list
-  { id: 'act-13', dayId: 'maybe', section: 'maybe', title: 'teamLab Planets',         notes: 'Digital art museum in Toyosu – book ahead',           location: 'Toyosu',      order: 0, emoji: '🎨' },
-  { id: 'act-14', dayId: 'maybe', section: 'maybe', title: 'Tsukiji Outer Market',    notes: 'Best breakfast in Tokyo – fresh tuna, tamagoyaki',   location: 'Tsukiji',     order: 1, emoji: '🐟' },
-  { id: 'act-15', dayId: 'maybe', section: 'maybe', title: 'Nakameguro Canal Walk',   notes: 'Especially beautiful with cherry blossoms',          location: 'Nakameguro',  order: 2, emoji: '🌊' },
-  { id: 'act-16', dayId: 'maybe', section: 'maybe', title: 'Odaiba – Gundam Statue',  notes: 'Giant robot! Worth the detour',                      location: 'Odaiba',      order: 3, emoji: '🤖' },
+  // Activity ideas tagged to Tokyo (show on Tokyo day pages, not on main maybe list)
+  { id: 'act-13', dayId: 'maybe', section: 'maybe', title: 'teamLab Planets',         notes: 'Digital art museum in Toyosu – book ahead',           location: 'Toyosu',     locationId: 'loc-tokyo', order: 0, emoji: '🎨' },
+  { id: 'act-14', dayId: 'maybe', section: 'maybe', title: 'Tsukiji Outer Market',    notes: 'Best breakfast in Tokyo – fresh tuna, tamagoyaki',   location: 'Tsukiji',    locationId: 'loc-tokyo', order: 1, emoji: '🐟' },
+  { id: 'act-15', dayId: 'maybe', section: 'maybe', title: 'Nakameguro Canal Walk',   notes: 'Especially beautiful with cherry blossoms',          location: 'Nakameguro', locationId: 'loc-tokyo', order: 2, emoji: '🌊' },
+
+  // City-level suggestions (no locationId = appear on main page Maybe List as city ideas)
+  { id: 'act-city-1', dayId: 'maybe', section: 'maybe', title: 'Hiroshima',  notes: 'Vredesmonument, Miyajima eiland met drijvend torii-poort', order: 0, emoji: '🕊️' },
+  { id: 'act-city-2', dayId: 'maybe', section: 'maybe', title: 'Nara',       notes: 'Vrije hertjes in het park, Tōdai-ji tempel', order: 1, emoji: '🦌' },
+  { id: 'act-city-3', dayId: 'maybe', section: 'maybe', title: 'Nikko',      notes: 'Prachtige tempels en shrines in het bos, dagtrip vanuit Tokyo', order: 2, emoji: '🏔️' },
 ];

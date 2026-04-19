@@ -1,13 +1,98 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Trip, Location, Day, Activity, Section } from '$lib/types';
 import { mockTrip, mockLocations, mockDays, mockActivities } from '$lib/data/mockData';
+import { goto } from '$app/navigation';
 
-// ─── Raw stores ───────────────────────────────────────────────────────────────
+// ─── LocalStorage helpers ────────────────────────────────────────────────────
+
+function lsRead<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function lsWrite(key: string, value: unknown) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// ─── Mock data versioning ─────────────────────────────────────────────────────
+// Bump this whenever mockData.ts changes so localStorage cache is cleared.
+const MOCK_DATA_VERSION = 3;
+
+// ─── Multi-trip architecture ──────────────────────────────────────────────────
+
+export const allTrips = writable<Trip[]>(
+  lsRead('roamly_all_trips', [mockTrip])
+);
+
+export const activeTripId = writable<string>(
+  lsRead('roamly_active_trip_id', mockTrip.id)
+);
+
+// ─── Raw stores (initialized from localStorage or per-trip data) ──────────────
 
 export const trip      = writable<Trip>(mockTrip);
-export const locations = writable<Location[]>(mockLocations);
-export const days      = writable<Day[]>(mockDays);
-export const activities = writable<Activity[]>(mockActivities);
+export const locations = writable<Location[]>([]);
+export const days      = writable<Day[]>([]);
+export const activities = writable<Activity[]>([]);
+
+// ─── Initialize current trip data on mount ──────────────────────────────────
+
+if (typeof window !== 'undefined') {
+  const initActiveTrip = () => {
+    const activeId = get(activeTripId);
+
+    // If the stored mock-data version is outdated, reset the demo trip to fresh mock data.
+    const storedVersion = lsRead<number>('roamly_mock_version', 0);
+    const isStaleDemo   = storedVersion < MOCK_DATA_VERSION && activeId === mockTrip.id;
+    if (isStaleDemo) {
+      lsWrite('roamly_mock_version', MOCK_DATA_VERSION);
+      lsWrite(`roamly_trip_data_${activeId}`, {
+        locations: mockLocations,
+        days:      mockDays,
+        activities: mockActivities,
+      });
+    }
+
+    const tripData = lsRead(`roamly_trip_data_${activeId}`, {
+      locations:  activeId === mockTrip.id ? mockLocations  : [],
+      days:       activeId === mockTrip.id ? mockDays       : [],
+      activities: activeId === mockTrip.id ? mockActivities : [],
+    });
+    const tripMeta = get(allTrips).find((t) => t.id === activeId) || mockTrip;
+    trip.set(tripMeta);
+    locations.set(tripData.locations);
+    days.set(tripData.days);
+    activities.set(tripData.activities);
+  };
+  initActiveTrip();
+}
+
+// ─── Auto-save to localStorage on every change ───────────────────────────────
+
+if (typeof window !== 'undefined') {
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const activeId = get(activeTripId);
+      lsWrite(`roamly_trip_data_${activeId}`, {
+        locations: get(locations),
+        days: get(days),
+        activities: get(activities),
+      });
+    }, 400);
+  }
+  trip.subscribe(scheduleSave);
+  locations.subscribe(scheduleSave);
+  days.subscribe(scheduleSave);
+  activities.subscribe(scheduleSave);
+}
 
 // ─── Firestore sync (lazy import — only runs client-side when logged in) ──────
 
@@ -63,6 +148,11 @@ export function updateDay(dayId: string, patch: Partial<Day>) {
 export function updateTrip(patch: Partial<Trip>) {
   trip.update((t) => {
     const updated = { ...t, ...patch };
+    // Also update in allTrips
+    allTrips.update((all) =>
+      all.map((tr) => (tr.id === updated.id ? updated : tr))
+    );
+    lsWrite('roamly_all_trips', get(allTrips));
     if (_firestoreUid) {
       import('$lib/firebase/firestore').then(({ saveTrip }) => {
         saveTrip(_firestoreUid!, updated);
@@ -299,6 +389,8 @@ export function addLocation(location: Location) {
   }
   // Resolve any overlaps caused by the new location
   resolveConflicts(location.id);
+  // Update travel days
+  updateTravelDays();
 }
 
 export function updateLocation(updated: Location) {
@@ -329,6 +421,8 @@ export function updateLocation(updated: Location) {
   }
   // Resolve downstream conflicts
   resolveConflicts(updated.id);
+  // Update travel days
+  updateTravelDays();
 }
 
 export function removeLocation(locationId: string) {
@@ -348,4 +442,106 @@ export function removeLocation(locationId: string) {
       locDays.forEach((d) => deleteDay(_firestoreUid!, d.id));
     });
   }
+}
+
+// ─── Travel days (Feature 2) ──────────────────────────────────────────────────
+
+/**
+ * Auto-detect travel days between consecutive cities.
+ * When two cities are consecutive (cityA.endDate === cityB.startDate),
+ * mark cityB's first day with departureLocationId = cityA.id.
+ * When cities are NOT consecutive, clear the departureLocationId on first days.
+ */
+export function updateTravelDays() {
+  const locs = [...get(locations)].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const updates: Partial<Day>[] = [];
+
+  for (let i = 0; i < locs.length; i++) {
+    const curr = locs[i];
+    const daysForCurr = get(days).filter((d) => d.locationId === curr.id).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (daysForCurr.length === 0) continue;
+    const firstDay = daysForCurr[0];
+
+    if (i > 0) {
+      const prev = locs[i - 1];
+      if (prev.endDate === curr.startDate) {
+        // Consecutive: set departure location
+        updates.push({ id: firstDay.id, departureLocationId: prev.id });
+      } else {
+        // Not consecutive: clear departure location
+        updates.push({ id: firstDay.id, departureLocationId: undefined });
+      }
+    } else {
+      // First location: clear any departure location
+      updates.push({ id: firstDay.id, departureLocationId: undefined });
+    }
+  }
+
+  // Apply updates to days store
+  days.update((all) => {
+    return all.map((d) => {
+      const patch = updates.find((u) => u.id === d.id);
+      return patch ? { ...d, ...patch } : d;
+    });
+  });
+
+  // Save to Firestore if connected
+  if (_firestoreUid) {
+    import('$lib/firebase/firestore').then(({ saveDay }) => {
+      updates.forEach((patch) => {
+        const day = get(days).find((d) => d.id === patch.id);
+        if (day) saveDay(_firestoreUid!, day);
+      });
+    });
+  }
+}
+
+// ─── Create a brand-new trip (adds to allTrips, doesn't clear old data) ──────
+
+export function createNewTrip(name: string, startDate: string, endDate: string) {
+  const newId = `trip-${Date.now()}`;
+  const newTrip: Trip = { id: newId, name, startDate, endDate };
+
+  // Add to allTrips
+  allTrips.update((all) => [...all, newTrip]);
+  lsWrite('roamly_all_trips', get(allTrips));
+
+  // Switch to new trip
+  switchTrip(newId);
+}
+
+// ─── Switch to a different trip ───────────────────────────────────────────────
+
+export function switchTrip(tripId: string) {
+  // Save current trip data before switching
+  const activeId = get(activeTripId);
+  lsWrite(`roamly_trip_data_${activeId}`, {
+    locations: get(locations),
+    days: get(days),
+    activities: get(activities),
+  });
+
+  // Update active trip
+  activeTripId.set(tripId);
+  lsWrite('roamly_active_trip_id', tripId);
+
+  // Load new trip data
+  const tripMeta = get(allTrips).find((t) => t.id === tripId);
+  if (!tripMeta) return;
+
+  trip.set(tripMeta);
+
+  const tripData = lsRead(`roamly_trip_data_${tripId}`, {
+    locations: [],
+    days: [],
+    activities: [],
+  });
+
+  locations.set(tripData.locations);
+  days.set(tripData.days);
+  activities.set(tripData.activities);
+
+  // Navigate home
+  goto('/');
 }

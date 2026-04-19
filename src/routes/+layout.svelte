@@ -2,11 +2,12 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { trip, enableFirestoreSync, disableFirestoreSync } from '$lib/stores/trip';
+  import { trip, allTrips, activeTripId, switchTrip, enableFirestoreSync, disableFirestoreSync } from '$lib/stores/trip';
   import { user, authReady } from '$lib/stores/auth';
   import { signInWithGoogle, signOutUser } from '$lib/firebase/auth';
   import { aiQuotaRemaining, MAX_GUEST_CALLS } from '$lib/stores/aiQuota';
   import TripEditModal from '$lib/components/TripEditModal.svelte';
+  import NewTripModal from '$lib/components/NewTripModal.svelte';
   import SettingsModal from '$lib/components/SettingsModal.svelte';
   import { currentTheme } from '$lib/stores/theme';
 
@@ -15,6 +16,7 @@
   let signingIn    = $state(false);
   let tripMenuOpen = $state(false);
   let tripEditOpen = $state(false);
+  let newTripOpen  = $state(false);
   let settingsOpen = $state(false);
 
   // Start/stop Firestore sync when auth state changes
@@ -40,6 +42,16 @@
   function formatDate(d: string) {
     return new Date(d + 'T00:00:00').toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   }
+
+  function isArchived(trip: any): boolean {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(trip.endDate + 'T00:00:00');
+    return endDate < today;
+  }
+
+  const upcomingTrips = $derived($allTrips.filter((t) => !isArchived(t)));
+  const archivedTrips = $derived($allTrips.filter((t) => isArchived(t)));
 </script>
 
 <svelte:head>
@@ -51,6 +63,10 @@
 
 {#if tripEditOpen}
   <TripEditModal onClose={() => { tripEditOpen = false; }} />
+{/if}
+
+{#if newTripOpen}
+  <NewTripModal onClose={() => { newTripOpen = false; }} />
 {/if}
 
 {#if settingsOpen}
@@ -78,8 +94,7 @@
             class="flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 transition-colors"
             style="color: #57564f; background-color: {tripMenuOpen ? '#f0eeea' : 'transparent'};"
           >
-            <span>{$trip.coverEmoji ?? '✈️'}</span>
-            <span class="font-medium hidden sm:inline" style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span class="font-medium" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
               {$trip.name}
             </span>
             <!-- Chevron -->
@@ -99,19 +114,71 @@
 
             <!-- Dropdown menu -->
             <div
-              class="absolute left-0 mt-1 rounded-2xl z-20"
-              style="background: white; border: 1px solid #e8e6e0; box-shadow: 0 4px 20px rgba(0,0,0,0.10); min-width: 200px; top: 100%;"
+              class="absolute left-0 mt-1 rounded-2xl z-20 max-h-96 overflow-y-auto"
+              style="background: white; border: 1px solid #e8e6e0; box-shadow: 0 4px 20px rgba(0,0,0,0.10); min-width: 280px; top: 100%;"
             >
-              <!-- Huidige reis info -->
-              <div class="px-4 py-3" style="border-bottom: 1px solid #f0eeea;">
-                <p class="text-xs font-semibold" style="color: #1a1917;">{$trip.coverEmoji ?? '✈️'} {$trip.name}</p>
-                <p class="text-xs mt-0.5" style="color: #a09e98;">
-                  {formatDate($trip.startDate)} – {formatDate($trip.endDate)}
-                </p>
-              </div>
+              <!-- "Mijn reizen" section header -->
+              {#if upcomingTrips.length > 0}
+                <div class="px-4 py-2" style="border-bottom: 1px solid #f0eeea;">
+                  <p class="text-xs font-semibold uppercase tracking-wide" style="color: #a09e98; letter-spacing: 0.05em;">Mijn reizen</p>
+                </div>
 
-              <!-- Acties -->
-              <div class="py-1.5">
+                <!-- Upcoming trips list -->
+                <div class="py-1.5">
+                  {#each upcomingTrips as t (t.id)}
+                    <button
+                      onclick={() => { tripMenuOpen = false; switchTrip(t.id); }}
+                      class="w-full flex items-center justify-between gap-2 px-4 py-2 text-xs transition-colors text-left"
+                      style="background-color: {$activeTripId === t.id ? '#f0eeea' : 'transparent'}; color: #57564f;"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = $activeTripId === t.id ? '#f0eeea' : 'transparent'; }}
+                    >
+                      <div class="flex-1 min-w-0">
+                        <p class="font-medium truncate">{t.name}</p>
+                        <p style="color: #a09e98; font-size: 0.7rem;">
+                          {formatDate(t.startDate)} – {formatDate(t.endDate)}
+                        </p>
+                      </div>
+                      {#if $activeTripId === t.id}
+                        <span style="color: #0d9488; font-weight: bold;">✓</span>
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              <!-- "Archief" section header (only if there are archived trips) -->
+              {#if archivedTrips.length > 0}
+                <div class="px-4 py-2" style="border-top: 1px solid #f0eeea; border-bottom: 1px solid #f0eeea;">
+                  <p class="text-xs font-semibold uppercase tracking-wide" style="color: #a09e98; letter-spacing: 0.05em;">Archief</p>
+                </div>
+
+                <!-- Archived trips list -->
+                <div class="py-1.5">
+                  {#each archivedTrips as t (t.id)}
+                    <button
+                      onclick={() => { tripMenuOpen = false; switchTrip(t.id); }}
+                      class="w-full flex items-center justify-between gap-2 px-4 py-2 text-xs transition-colors text-left"
+                      style="background-color: {$activeTripId === t.id ? '#f0eeea' : 'transparent'}; color: #57564f;"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = $activeTripId === t.id ? '#f0eeea' : 'transparent'; }}
+                    >
+                      <div class="flex-1 min-w-0">
+                        <p class="font-medium truncate">{t.name}</p>
+                        <p style="color: #a09e98; font-size: 0.7rem;">
+                          {formatDate(t.startDate)} – {formatDate(t.endDate)}
+                        </p>
+                      </div>
+                      {#if $activeTripId === t.id}
+                        <span style="color: #0d9488; font-weight: bold;">✓</span>
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              <!-- Acties footer -->
+              <div class="py-1.5 border-t border-t-[#f0eeea]">
                 <button
                   onclick={() => { tripMenuOpen = false; tripEditOpen = true; }}
                   class="w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors text-left"
@@ -125,6 +192,22 @@
                   </svg>
                   Reis bewerken
                 </button>
+
+                {#if $user}
+                  <button
+                    onclick={() => { tripMenuOpen = false; newTripOpen = true; }}
+                    class="w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors text-left"
+                    style="color: #57564f;"
+                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                    onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <!-- Plus icoon -->
+                    <svg class="w-3.5 h-3.5" style="color: #8b8a84;" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M7 2v10M2 7h10"/>
+                    </svg>
+                    Nieuwe reis aanmaken
+                  </button>
+                {/if}
               </div>
             </div>
           {/if}

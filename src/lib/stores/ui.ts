@@ -16,3 +16,7 @@ export const expandedActivityId = writable<string | null>(null);
 
 // Edit mode: only one activity card in edit mode at a time
 export const editingActivityId = writable<string | null>(null);
+
+// Global flag: a city idea is currently being dragged from the Maybe List.
+// Used by the planning timeline to show insertion drop zones.
+export const draggingCityIdea = writable(false);
