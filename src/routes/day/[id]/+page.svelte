@@ -475,7 +475,7 @@
                 <MiniMap coord={activeCoord} label={activeLabel} zoom={14} />
               </div>
             {/if}
-            <MaybeList filterLocationId={location?.id} />
+            <MaybeList filterLocationId={location?.id} dayId={dayId} />
           </div>
         </div>
 

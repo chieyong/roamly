@@ -211,19 +211,6 @@
   type CityCard = { id: string; name: string; color: string; startDate: string; endDate: string };
   let cityCards      = $state<CityCard[]>([]);
   let isCityDragging = $state(false);
-  // dragDisabled prevents accidental drags while scrolling on mobile.
-  // Only the 6-dot handle pointerdown flips this to true.
-  let cityDragEnabled = $state(false);
-
-  function onCityHandlePointerDown() {
-    cityDragEnabled = true;
-    // Reset only if a drag never actually started (tap without drag).
-    // If a drag starts, isCityDragging becomes true and we skip the reset here —
-    // handleCitySectionFinalize will reset instead.
-    window.addEventListener('pointerup', () => {
-      if (!isCityDragging) cityDragEnabled = false;
-    }, { once: true });
-  }
 
   // Sync cityCards from store when not actively dragging
   $effect(() => {
@@ -240,7 +227,6 @@
   }
 
   function handleCitySectionFinalize(e: CustomEvent) {
-    cityDragEnabled = false;
     const newCards: CityCard[] = e.detail.items;
 
     // Recalculate all dates: preserve each city's original duration, sequential from trip start
@@ -256,13 +242,51 @@
       return { ...card, startDate, endDate };
     });
 
-    // Apply changes: update from LAST to FIRST to avoid resolveConflicts cascading incorrectly
+    // Build activity migration map BEFORE updateLocation regenerates days.
+    // For each city whose dates change, positionally map old day IDs → new day IDs.
+    const dayMigrations = new Map<string, string>();
+    for (const newCard of recalculated) {
+      const origLoc = get(locations).find(l => l.id === newCard.id);
+      if (!origLoc) continue;
+      if (origLoc.startDate === newCard.startDate && origLoc.endDate === newCard.endDate) continue;
+
+      // Old days sorted by date (position 0 = first day of stay)
+      const oldDays = get(days)
+        .filter(d => d.locationId === newCard.id)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      // New day IDs that generateDaysForLocation will create
+      const newDayIds: string[] = [];
+      const endDate = new Date(newCard.endDate + 'T00:00:00');
+      let cur = new Date(newCard.startDate + 'T00:00:00');
+      while (cur < endDate) {
+        newDayIds.push(`day-${newCard.id}-${localDateStr(cur)}`);
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      // Map old → new by position (day 1 of old stay → day 1 of new stay, etc.)
+      for (let i = 0; i < Math.min(oldDays.length, newDayIds.length); i++) {
+        if (oldDays[i].id !== newDayIds[i]) {
+          dayMigrations.set(oldDays[i].id, newDayIds[i]);
+        }
+      }
+    }
+
+    // Apply location date changes: last → first to prevent resolveConflicts cascade conflicts
     const reversed = [...recalculated].reverse();
     for (const card of reversed) {
       const orig = get(locations).find(l => l.id === card.id);
       if (orig && (orig.startDate !== card.startDate || orig.endDate !== card.endDate)) {
         updateLocation({ ...orig, startDate: card.startDate, endDate: card.endDate });
       }
+    }
+
+    // Migrate activity dayIds to their new values (preserves planned activities after reorder)
+    if (dayMigrations.size > 0) {
+      activities.update(all => all.map(a => {
+        const newDayId = dayMigrations.get(a.dayId);
+        return newDayId ? { ...a, dayId: newDayId } : a;
+      }));
     }
 
     isCityDragging = false;
@@ -415,7 +439,7 @@
 
     <!-- ── City sections: DnD-sortable (issue 3) ──────────────────────────────── -->
     <div
-      use:dndzone={{ items: cityCards, type: 'planning-city', dropTargetStyle: {}, flipDurationMs: 250, dragDisabled: !cityDragEnabled }}
+      use:dndzone={{ items: cityCards, type: 'planning-city', dropTargetStyle: {}, flipDurationMs: 250 }}
       onconsider={handleCitySectionConsider}
       onfinalize={handleCitySectionFinalize}
       class="space-y-0"
@@ -443,12 +467,10 @@
 
             <!-- City header row: left side = drag handle + dot + name; right side = edit chevron -->
             <div class="flex items-center gap-1.5 mb-2 group">
-              <!-- Drag handle: always visible on mobile, hover-only on desktop -->
+              <!-- Drag handle: visual affordance only — whole row is draggable -->
               <div
-                onpointerdown={onCityHandlePointerDown}
-                class="opacity-30 lg:opacity-0 lg:group-hover:opacity-50 hover:opacity-70 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
-                title="Versleep om volgorde te wijzigen"
-                style="color: #a09e98; padding: 2px; touch-action: none;"
+                class="opacity-30 lg:opacity-0 lg:group-hover:opacity-50 flex-shrink-0 transition-opacity pointer-events-none"
+                style="color: #a09e98; padding: 2px;"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
                   <circle cx="5.5" cy="4" r="1.2"/>

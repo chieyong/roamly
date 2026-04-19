@@ -27,23 +27,26 @@
   });
 
   // ── Inline field editing (time / duration) ────────────────────────────────
-  // Allows clicking the time or duration badge directly — without opening the full edit form.
   let inlineField = $state<'time' | 'duration' | null>(null);
   let inlineValue = $state('');
+  let inlineDurationMinutes = $state(60);
 
   function startInlineEdit(field: 'time' | 'duration', e: MouseEvent) {
     e.stopPropagation();
-    // Close any full edit form open for this card
     if ($editingActivityId === activity.id) editingActivityId.set(null);
     inlineField = field;
-    inlineValue = field === 'time' ? (activity.time ?? '') : (activity.duration ?? '');
+    if (field === 'time') {
+      inlineValue = to24h(activity.time ?? '');
+    } else {
+      inlineDurationMinutes = durationToMinutes(activity.duration);
+    }
   }
 
   function saveInlineEdit() {
     if (inlineField === 'time') {
       updateActivity({ ...activity, time: inlineValue.trim() || undefined });
     } else if (inlineField === 'duration') {
-      updateActivity({ ...activity, duration: inlineValue.trim() || undefined });
+      updateActivity({ ...activity, duration: minutesToLabel(inlineDurationMinutes) });
     }
     inlineField = null;
   }
@@ -55,11 +58,11 @@
   }
 
   // ── Edit form state ───────────────────────────────────────────────────────
-  let editTitle    = $state('');
-  let editNotes    = $state('');
-  let editTime     = $state('');
-  let editLocation = $state('');
-  let editDuration = $state('');
+  let editTitle           = $state('');
+  let editNotes           = $state('');
+  let editTime            = $state('');
+  let editLocation        = $state('');
+  let editDurationMinutes = $state(60);
 
   // ── Contextual image via Unsplash keyword search ─────────────────────────
   function getImageQuery(title: string, loc: string | undefined): string {
@@ -116,11 +119,11 @@
   function focusEl(el: HTMLElement) { el.focus(); }
 
   function startEditing() {
-    editTitle    = activity.title;
-    editNotes    = activity.notes ?? '';
-    editTime     = activity.time ?? '';
-    editLocation = activity.location ?? '';
-    editDuration = activity.duration ?? '';
+    editTitle           = activity.title;
+    editNotes           = activity.notes ?? '';
+    editTime            = to24h(activity.time ?? '');
+    editLocation        = activity.location ?? '';
+    editDurationMinutes = durationToMinutes(activity.duration);
     chatOpen = false;
     inlineField = null;
     expandedActivityId.set(null);
@@ -134,7 +137,7 @@
       notes:    editNotes.trim()    || undefined,
       time:     editTime.trim()     || undefined,
       location: editLocation.trim() || undefined,
-      duration: editDuration.trim() || undefined,
+      duration: editDurationMinutes > 0 ? minutesToLabel(editDurationMinutes) : undefined,
     });
     editingActivityId.set(null);
   }
@@ -162,6 +165,37 @@
     e.stopPropagation();
     chatOpen = true;
   }
+
+  // ── Time / Duration helpers ───────────────────────────────────────────────
+
+  /** Convert stored time (e.g. "8:30 AM" or "08:30") → 24h display "08:30". */
+  function to24h(t: string | undefined): string {
+    if (!t) return '';
+    if (/^\d{1,2}:\d{2}$/.test(t)) return t; // already 24h
+    const m = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!m) return t;
+    let h = parseInt(m[1]);
+    if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
+    if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+    return `${String(h).padStart(2, '0')}:${m[2]}`;
+  }
+
+  /** Parse any duration string ("1h", "1.5u", "30m", "1u 30m") → minutes. */
+  function durationToMinutes(d: string | undefined): number {
+    if (!d) return 60;
+    const hM = d.match(/(\d+(?:\.\d+)?)\s*[hu]/i);
+    const mM = d.match(/(\d+)\s*m/i);
+    let total = (hM ? parseFloat(hM[1]) * 60 : 0) + (mM ? parseInt(mM[1]) : 0);
+    if (!total) { const n = parseFloat(d); if (!isNaN(n)) total = n * 60; }
+    return Math.max(15, Math.min(480, Math.round(total / 15) * 15)) || 60;
+  }
+
+  /** Convert minutes → readable label ("30m", "1u", "1u 30m"). */
+  function minutesToLabel(min: number): string {
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60), r = min % 60;
+    return r === 0 ? `${h}u` : `${h}u ${r}m`;
+  }
 </script>
 
 <div
@@ -184,16 +218,9 @@
       />
       <div class="flex gap-2">
         <input
+          type="time"
           bind:value={editTime}
           onkeydown={handleKeydown}
-          placeholder="9:00 AM"
-          class="w-28 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
-          style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
-        />
-        <input
-          bind:value={editDuration}
-          onkeydown={handleKeydown}
-          placeholder="bijv. 1.5u"
           class="w-24 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
           style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
         />
@@ -204,6 +231,18 @@
           class="flex-1 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
           style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
         />
+      </div>
+      <!-- Duration slider -->
+      <div class="flex items-center gap-3 px-3 py-2 rounded-xl" style="background: #fafaf8; border: 1px solid #e8e6e0;">
+        <span class="text-xs" style="color: #8b8a84; flex-shrink: 0;">Duur</span>
+        <input
+          type="range" min="15" max="480" step="15"
+          bind:value={editDurationMinutes}
+          style="flex: 1; accent-color: #14b8a6; cursor: pointer;"
+        />
+        <span class="text-xs tabular-nums font-medium" style="color: #57564f; min-width: 36px; text-align: right;">
+          {minutesToLabel(editDurationMinutes)}
+        </span>
       </div>
       <textarea
         bind:value={editNotes}
@@ -252,13 +291,13 @@
         <!-- Inline time editor -->
         {#if inlineField === 'time'}
           <input
+            type="time"
             bind:value={inlineValue}
             onblur={saveInlineEdit}
             onkeydown={handleInlineKeydown}
             use:focusEl
             onclick={(e) => e.stopPropagation()}
-            placeholder="9:00 AM"
-            class="text-xs font-medium tabular-nums w-22 text-center rounded-lg px-2 py-0.5 focus:outline-none flex-shrink-0"
+            class="text-xs font-medium tabular-nums text-center rounded-lg px-2 py-0.5 focus:outline-none flex-shrink-0"
             style="color: #0d9488; background: #f0fdfa; border: 1px solid #a7f3d0; min-width: 72px;"
           />
         {:else if activity.time}
@@ -273,7 +312,7 @@
             onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f0fdfa'; }}
             onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            {activity.time}
+            {to24h(activity.time)}
           </span>
         {:else if !isDragging}
           <!-- Subtle "+ tijd" hint, only visible on hover -->
@@ -301,18 +340,22 @@
           <span class="flex-1"></span>
         {/if}
 
-        <!-- Inline duration editor -->
+        <!-- Inline duration editor: range slider -->
         {#if inlineField === 'duration'}
-          <input
-            bind:value={inlineValue}
-            onblur={saveInlineEdit}
-            onkeydown={handleInlineKeydown}
-            use:focusEl
+          <div
+            class="flex items-center gap-1.5 flex-shrink-0"
             onclick={(e) => e.stopPropagation()}
-            placeholder="bijv. 2u"
-            class="text-xs w-16 text-center rounded-lg px-2 py-0.5 focus:outline-none flex-shrink-0"
-            style="color: #a09e98; background: #f4f3ef; border: 1px solid #e8e6e0;"
-          />
+          >
+            <input
+              type="range" min="15" max="480" step="15"
+              bind:value={inlineDurationMinutes}
+              onchange={saveInlineEdit}
+              style="width: 72px; accent-color: #14b8a6; cursor: pointer;"
+            />
+            <span class="text-xs tabular-nums" style="color: #a09e98; min-width: 30px;">
+              {minutesToLabel(inlineDurationMinutes)}
+            </span>
+          </div>
         {:else if activity.duration}
           <span
             role="button"

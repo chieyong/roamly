@@ -2,12 +2,18 @@
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import type { Activity } from '$lib/types';
-  import { maybeList, addActivity, deleteActivity, updateActivity, generateId, locations, daysByLocation, activities } from '$lib/stores/trip';
+  import { maybeList, addActivity, deleteActivity, updateActivity, generateId, locations, daysByLocation, activities, days } from '$lib/stores/trip';
   import { draggingCityIdea } from '$lib/stores/ui';
 
-  // When filterLocationId is provided (day page): show items for that city + untagged.
-  // When omitted (main page): show ONLY untagged items (city-level ideas with no locationId).
-  let { filterLocationId = undefined }: { filterLocationId?: string } = $props();
+  // When filterLocationId is provided (day page): show items for that city.
+  // When omitted (main page): show ONLY city-level ideas (no locationId).
+  let {
+    filterLocationId = undefined,
+    dayId            = undefined,
+  }: {
+    filterLocationId?: string;
+    dayId?:            string;
+  } = $props();
 
   const filteredMaybe = $derived(
     filterLocationId !== undefined
@@ -87,15 +93,63 @@
   const isMainPage = $derived(filterLocationId === undefined);
 
   // DnD type: on main page use 'city-idea' so items can be dragged to the planning zone.
-  // On day page use default (compatible with DaySection drop zones).
   const dndType = $derived(isMainPage ? 'city-idea' : undefined);
 
-  // Label for the empty state
   const emptyLabel = $derived(
     isMainPage
       ? 'Geen bestemmingsideeën. Voeg steden toe die je wilt bezoeken!'
       : 'Geen ideeën voor deze bestemming'
   );
+
+  // ── Generate Ideas ────────────────────────────────────────────────────────
+  let generating = $state(false);
+  let generateError = $state('');
+
+  async function generateIdeas() {
+    if (!filterLocationId || generating) return;
+    generating    = true;
+    generateError = '';
+
+    const locationName = $locations.find(l => l.id === filterLocationId)?.name ?? '';
+
+    // Activities already planned for this specific day
+    const dayActivities = dayId
+      ? $activities.filter(a => a.dayId === dayId && a.section !== 'maybe')
+      : [];
+
+    // All activities planned across the whole trip (non-maybe, non-travel)
+    const tripActivities = $activities.filter(a => a.section !== 'maybe');
+
+    // Date of this day
+    const dayDate = dayId ? ($days.find(d => d.id === dayId)?.date ?? '') : '';
+
+    try {
+      const res = await fetch('/api/generate-ideas', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ locationName, dayDate, dayActivities, tripActivities }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { ideas } = await res.json();
+      for (const idea of ideas) {
+        addActivity({
+          id:         generateId(),
+          dayId:      'maybe',
+          section:    'maybe',
+          title:      idea.title ?? '',
+          notes:      idea.notes   ?? undefined,
+          location:   idea.location ?? undefined,
+          locationId: filterLocationId,
+          order:      $maybeList.length,
+        });
+      }
+    } catch (e) {
+      generateError = 'Kon geen ideeën laden. Probeer opnieuw.';
+      console.error(e);
+    } finally {
+      generating = false;
+    }
+  }
 </script>
 
 <aside
@@ -124,7 +178,7 @@
   <p class="text-xs leading-relaxed" style="color: #8b8a84;">
     {isMainPage
       ? 'Steden die je overweegt te bezoeken. Sleep naar de planning om ze in te plannen.'
-      : 'Ideeën voor deze bestemming. Sleep naar een dagdeel als je ze inplant.'}
+      : 'Sleep naar een dagdeel'}
   </p>
 
   <!-- Add form -->
@@ -253,4 +307,33 @@
       </div>
     {/if}
   </div>
+
+  <!-- Generate Ideas button — only on day page -->
+  {#if !isMainPage}
+    <div class="pt-1">
+      <button
+        onclick={generateIdeas}
+        disabled={generating}
+        class="w-full flex items-center justify-center gap-2 text-xs py-2.5 rounded-2xl font-medium transition-all"
+        style="
+          background-color: {generating ? '#f4f3ef' : '#f0fdfa'};
+          color: {generating ? '#b0ada7' : '#0d9488'};
+          border: 1.5px solid {generating ? '#e8e6e0' : '#a7f3d0'};
+        "
+      >
+        {#if generating}
+          <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          Ideeën genereren…
+        {:else}
+          <span>✦</span>
+          Genereer ideeën met AI
+        {/if}
+      </button>
+      {#if generateError}
+        <p class="text-xs mt-1.5 text-center" style="color: #f43f5e;">{generateError}</p>
+      {/if}
+    </div>
+  {/if}
 </aside>

@@ -9,6 +9,7 @@
   import TripEditModal from '$lib/components/TripEditModal.svelte';
   import NewTripModal from '$lib/components/NewTripModal.svelte';
   import SettingsModal from '$lib/components/SettingsModal.svelte';
+  import TripTimeline from '$lib/components/TripTimeline.svelte';
   import { currentTheme } from '$lib/stores/theme';
 
   let { children } = $props();
@@ -334,6 +335,15 @@
       </div>
     </div>
   </header>
+
+  <!-- Compact trip timeline: shown on day pages, click navigates to overview -->
+  {#if !isOnReis}
+    <div style="border-bottom: 1px solid var(--clr-border, #e8e6e0); background-color: var(--clr-header-bg, rgba(250,250,248,0.92)); backdrop-filter: blur(8px);">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
+        <TripTimeline />
+      </div>
+    </div>
+  {/if}
 
   <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
     {@render children()}
