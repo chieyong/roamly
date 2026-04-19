@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { trip, allTrips, activeTripId, switchTrip, enableFirestoreSync, disableFirestoreSync } from '$lib/stores/trip';
+  import { trip, allTrips, activeTripId, switchTrip, enableFirestoreSync, disableFirestoreSync, days } from '$lib/stores/trip';
   import { user, authReady } from '$lib/stores/auth';
   import { signInWithGoogle, signOutUser } from '$lib/firebase/auth';
   import { aiQuotaRemaining, MAX_GUEST_CALLS } from '$lib/stores/aiQuota';
@@ -52,6 +52,23 @@
 
   const upcomingTrips = $derived($allTrips.filter((t) => !isArchived(t)));
   const archivedTrips = $derived($allTrips.filter((t) => isArchived(t)));
+
+  // ── Reis / Dag switch ───────────────────────────────────────────────────────
+
+  const isOnReis = $derived($page.url.pathname === '/');
+  const isOnDag  = $derived($page.url.pathname.startsWith('/day/'));
+
+  /**
+   * The day ID to navigate to when clicking "Dag":
+   * - If already on a day page → stay on the same day
+   * - Otherwise → navigate to today's day, or the first upcoming day
+   */
+  const dagLinkId = $derived((() => {
+    if ($page.url.pathname.startsWith('/day/')) return $page.params.id;
+    const today  = new Date().toISOString().slice(0, 10);
+    const sorted = [...$days].sort((a, b) => a.date.localeCompare(b.date));
+    return (sorted.find(d => d.date >= today) ?? sorted[0])?.id ?? null;
+  })());
 </script>
 
 <svelte:head>
@@ -216,14 +233,41 @@
 
       <!-- Rechts: nav + auth -->
       <div class="flex items-center gap-3">
-        <!-- Overzicht link -->
-        <a
-          href="/"
-          class="text-xs px-3 py-1.5 rounded-xl transition-all"
-          style="{$page.url.pathname === '/'
-            ? 'background-color: #ccfbf1; color: #0f766e; font-weight: 500;'
-            : 'color: #8b8a84;'}"
-        >Overzicht</a>
+        <!-- Reis / Dag segmented switch -->
+        <div
+          style="
+            display: flex; align-items: center;
+            background: var(--clr-surface-alt, #f0eeea);
+            border-radius: 10px; padding: 2px; gap: 1px;
+          "
+        >
+          <a
+            href="/"
+            style="
+              padding: 4px 12px; border-radius: 8px;
+              font-size: 11px; font-weight: {isOnReis ? '600' : '400'};
+              text-decoration: none; white-space: nowrap;
+              background: {isOnReis ? 'white' : 'transparent'};
+              color: {isOnReis ? '#0f766e' : '#8b8a84'};
+              box-shadow: {isOnReis ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
+              transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+            "
+          >Reis</a>
+          {#if dagLinkId}
+            <a
+              href="/day/{dagLinkId}"
+              style="
+                padding: 4px 12px; border-radius: 8px;
+                font-size: 11px; font-weight: {isOnDag ? '600' : '400'};
+                text-decoration: none; white-space: nowrap;
+                background: {isOnDag ? 'white' : 'transparent'};
+                color: {isOnDag ? '#1a1917' : '#8b8a84'};
+                box-shadow: {isOnDag ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
+                transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+              "
+            >Dag</a>
+          {/if}
+        </div>
 
         <!-- Instellingen -->
         <button

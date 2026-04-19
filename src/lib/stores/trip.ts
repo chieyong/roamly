@@ -47,23 +47,13 @@ if (typeof window !== 'undefined') {
   const initActiveTrip = () => {
     const activeId = get(activeTripId);
 
-    // If the stored mock-data version is outdated, reset the demo trip to fresh mock data.
-    const storedVersion = lsRead<number>('roamly_mock_version', 0);
-    const isStaleDemo   = storedVersion < MOCK_DATA_VERSION && activeId === mockTrip.id;
-    if (isStaleDemo) {
-      lsWrite('roamly_mock_version', MOCK_DATA_VERSION);
-      lsWrite(`roamly_trip_data_${activeId}`, {
-        locations: mockLocations,
-        days:      mockDays,
-        activities: mockActivities,
-      });
-    }
+    // Demo trip always starts from fresh mock data — guests should never see
+    // stale localStorage from a previous session. Logged-in users get their data
+    // from Firestore which overrides this initial state immediately.
+    const tripData = activeId === mockTrip.id
+      ? { locations: mockLocations, days: mockDays, activities: mockActivities }
+      : lsRead(`roamly_trip_data_${activeId}`, { locations: [], days: [], activities: [] });
 
-    const tripData = lsRead(`roamly_trip_data_${activeId}`, {
-      locations:  activeId === mockTrip.id ? mockLocations  : [],
-      days:       activeId === mockTrip.id ? mockDays       : [],
-      activities: activeId === mockTrip.id ? mockActivities : [],
-    });
     const tripMeta = get(allTrips).find((t) => t.id === activeId) || mockTrip;
     trip.set(tripMeta);
     locations.set(tripData.locations);
@@ -78,9 +68,13 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   function scheduleSave() {
+    // Demo trip is never persisted to localStorage: guests always see fresh data,
+    // and logged-in users rely on Firestore as the source of truth.
+    const activeId = get(activeTripId);
+    if (activeId === mockTrip.id) return;
+
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const activeId = get(activeTripId);
       lsWrite(`roamly_trip_data_${activeId}`, {
         locations: get(locations),
         days: get(days),

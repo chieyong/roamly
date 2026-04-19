@@ -31,6 +31,19 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Prevent accidental text selection on mobile touch interactions */
+@media (max-width: 1024px) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Re-enable selection inside inputs and textareas */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
 /* Drag ghost */
 .drag-ghost {
   opacity: 0.4;

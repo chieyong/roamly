@@ -10,8 +10,8 @@
   }: {
     startDate:       string;
     endDate:         string;
-    /** Date ranges already claimed by other cities — shown with a subtle background. */
-    occupiedRanges?: Array<{ start: string; end: string }>;
+    /** Date ranges already claimed by other cities — shown with the city's tinted background. */
+    occupiedRanges?: Array<{ start: string; end: string; color?: string }>;
   } = $props();
 
   const MONTHS = ['Januari','Februari','Maart','April','Mei','Juni',
@@ -122,10 +122,20 @@
     return 'transparent';
   }
 
+  /** Convert a hex color to rgba with the given alpha. */
+  function hexToRgba(hex: string, alpha: number): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   function wrapperBg(ds: string): string {
     if (isInRange(ds)) return '#ccfbf1';
-    // Occupied by another city: warm beige tint
-    if (isOccupied(ds) && !isStart(ds) && !isEnd(ds)) return '#f5f0e8';
+    if (!isStart(ds) && !isEnd(ds)) {
+      const r = occupiedRanges.find(r => ds >= r.start && ds < r.end);
+      if (r) return r.color ? hexToRgba(r.color, 0.18) : '#f5f0e8';
+    }
     return 'transparent';
   }
 

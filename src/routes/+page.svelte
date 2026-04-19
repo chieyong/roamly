@@ -148,11 +148,11 @@
 
   // ── Inline edit/delete city ──────────────────────────────────────────────────
 
-  /** Occupied date ranges for the DateRangePicker — all OTHER cities' ranges. */
+  /** Occupied date ranges for the DateRangePicker — all OTHER cities' ranges, with their hex color. */
   const occupiedRanges = $derived(
     $locations
       .filter(l => l.id !== editingLocationId)   // exclude city being edited
-      .map(l => ({ start: l.startDate, end: l.endDate }))
+      .map(l => ({ start: l.startDate, end: l.endDate, color: cityColor(l.color) }))
   );
 
   let editingLocationId  = $state<string | null>(null);
@@ -217,8 +217,12 @@
 
   function onCityHandlePointerDown() {
     cityDragEnabled = true;
-    // Reset if pointer is released without a drag actually starting
-    window.addEventListener('pointerup', () => { cityDragEnabled = false; }, { once: true });
+    // Reset only if a drag never actually started (tap without drag).
+    // If a drag starts, isCityDragging becomes true and we skip the reset here —
+    // handleCitySectionFinalize will reset instead.
+    window.addEventListener('pointerup', () => {
+      if (!isCityDragging) cityDragEnabled = false;
+    }, { once: true });
   }
 
   // Sync cityCards from store when not actively dragging
@@ -406,10 +410,10 @@
 
             <!-- City header row: left side = drag handle + dot + name; right side = edit chevron -->
             <div class="flex items-center gap-1.5 mb-2 group">
-              <!-- Drag handle: only this element can start a city-section drag -->
+              <!-- Drag handle: always visible on mobile, hover-only on desktop -->
               <div
                 onpointerdown={onCityHandlePointerDown}
-                class="opacity-0 group-hover:opacity-40 hover:opacity-70 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
+                class="opacity-30 lg:opacity-0 lg:group-hover:opacity-50 hover:opacity-70 cursor-grab active:cursor-grabbing flex-shrink-0 transition-opacity"
                 title="Versleep om volgorde te wijzigen"
                 style="color: #a09e98; padding: 2px; touch-action: none;"
               >
@@ -536,20 +540,22 @@
               {@const travelDay = hasTravelDay && nextLocation ? $days.find(d => d.id === `day-${location.id}-${nextLocation.startDate}`) ?? null : null}
 
               <!-- Day rows -->
-              <div class="flex flex-col" style="border-left: 3px solid {cityColor(location.color)}; margin-left: 4px;">
+              <div class="flex flex-col" style="margin-left: 4px;">
                 {#each locationDays as day, i}
                   {@const preview = topActivity(day.id)}
                   {@const depLoc = day.departureLocationId ? $locations.find(l => l.id === day.departureLocationId) : null}
-                  {@const isTravelDay = !!depLoc}
+                  {@const hasContent = !!depLoc || !!preview}
+                  {@const rowBorderColor = hasContent ? cityColor(location.color) : '#dbd9d4'}
                   <button
                     onclick={() => goto(`/day/${day.id}`)}
+                    onpointerdown={(e) => e.stopPropagation()}
                     class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors rounded-r-xl"
-                    style="background-color: transparent;"
-                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); }}
+                    style="border-left: 3px solid {rowBorderColor}; background-color: transparent; touch-action: manipulation;"
+                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = hasContent ? cityBadge(location.color) : '#f7f6f4'; }}
                     onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <div class="flex items-center gap-3 min-w-0">
-                      <span class="text-xs flex-shrink-0 tabular-nums" style="color: var(--clr-muted, #8b8a84); min-width: 80px;">
+                      <span class="text-xs flex-shrink-0 tabular-nums" style="color: {hasContent ? 'var(--clr-muted, #8b8a84)' : '#b0ada7'}; min-width: 80px;">
                         {formatDayRow(day.date)}
                       </span>
                       {#if depLoc}
@@ -564,25 +570,15 @@
                       {:else if preview}
                         <span class="text-xs truncate" style="color: var(--clr-subtle, #57564f);">{preview}</span>
                       {:else}
-                        <!-- Placeholder block: visual cue that nothing is planned yet -->
-                        <span
-                          class="text-xs inline-flex items-center gap-1 px-2 py-0.5 rounded-md"
-                          style="
-                            border: 1.5px dashed #d4d1c8;
-                            color: #b0ada7;
-                            background: transparent;
-                          "
-                        >
-                          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M6 2v8M2 6h8"/>
-                          </svg>
-                          Activiteit toevoegen
+                        <!-- Empty day: muted placeholder -->
+                        <span class="text-xs" style="color: #c8c5bf; font-style: italic;">
+                          Nog niets gepland
                         </span>
                       {/if}
                     </div>
                     <svg
                       class="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      style="color: {cityColor(location.color)};"
+                      style="color: {rowBorderColor};"
                       viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
                     >
                       <path d="M5 2.5l4.5 4.5L5 11.5"/>
@@ -600,8 +596,9 @@
                     <div style="height: 1px; margin-left: 16px; background: repeating-linear-gradient(90deg, #f0eeea 0px, #f0eeea 4px, transparent 4px, transparent 8px);"></div>
                     <button
                       onclick={() => goto(`/day/${sharedDay.id}`)}
+                      onpointerdown={(e) => e.stopPropagation()}
                       class="group flex items-center justify-between gap-4 px-4 py-2.5 text-left w-full transition-colors rounded-r-xl"
-                      style="background-color: transparent;"
+                      style="border-left: 3px solid {cityColor(location.color)}; background-color: transparent; touch-action: manipulation;"
                       onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); }}
                       onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >

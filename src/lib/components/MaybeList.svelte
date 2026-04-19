@@ -11,8 +11,8 @@
 
   const filteredMaybe = $derived(
     filterLocationId !== undefined
-      // Day page: show items for this city OR untagged
-      ? $maybeList.filter(a => !a.locationId || a.locationId === filterLocationId)
+      // Day page: show only activity ideas tagged to this specific city
+      ? $maybeList.filter(a => a.locationId === filterLocationId)
       // Main page: show only city-level ideas (no locationId = not pinned to a specific city)
       : $maybeList.filter(a => !a.locationId)
   );
@@ -27,7 +27,10 @@
 
   function onHandlePointerDown() {
     listDragEnabled = true;
-    window.addEventListener('pointerup', () => { listDragEnabled = false; }, { once: true });
+    // Only reset if drag never actually started; if dragging is true, handleFinalize resets.
+    window.addEventListener('pointerup', () => {
+      if (!dragging) listDragEnabled = false;
+    }, { once: true });
   }
 
   $effect(() => {
@@ -200,10 +203,10 @@
           class="group flex items-start gap-3 p-3 rounded-2xl transition-all cursor-grab active:cursor-grabbing"
           style="background-color: #fafaf8; border: 1px solid #e8e6e0;"
         >
-          <!-- Drag handle: only this element initiates dragging (prevents accidental mobile scroll drags) -->
+          <!-- Drag handle: always visible on mobile, hover-only on desktop -->
           <div
             onpointerdown={onHandlePointerDown}
-            class="flex-shrink-0 mt-0.5 opacity-30 group-hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing"
+            class="flex-shrink-0 mt-0.5 opacity-35 lg:opacity-0 lg:group-hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing"
             style="touch-action: none;"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color: #8b8a84;">
