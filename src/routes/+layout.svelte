@@ -56,8 +56,20 @@
 
   // ── Reis / Dag switch ───────────────────────────────────────────────────────
 
-  const isOnReis = $derived($page.url.pathname === '/');
+  /** Home = new minimal overview page */
+  const isOnHome = $derived($page.url.pathname === '/');
+  /** Reis = detailed trip overview */
+  const isOnReis = $derived($page.url.pathname === '/overview');
   const isOnDag  = $derived($page.url.pathname.startsWith('/day/'));
+
+  // "Reis" nav button is visually active on both the home page AND the /overview page
+  const isReisSectionActive = $derived(isOnHome || isOnReis);
+
+  // Date of the currently open day (for the TripTimeline marker on day pages)
+  const currentDayId   = $derived(isOnDag ? ($page.params.id ?? null) : null);
+  const currentDayDate = $derived(
+    currentDayId ? ($days.find(d => d.id === currentDayId)?.date ?? null) : null
+  );
 
   /**
    * The day ID to navigate to when clicking "Dag":
@@ -91,28 +103,31 @@
   <SettingsModal onClose={() => { settingsOpen = false; }} />
 {/if}
 
-<div class="min-h-screen" data-theme={$currentTheme.id} style="background-color: var(--clr-bg, #fafaf8); color: var(--clr-text, #1a1917); font-family: var(--font-body, 'Inter', system-ui, sans-serif);">
+<div class="min-h-screen" data-theme={$currentTheme.id} style="background-color: var(--clr-bg, #fafaf8); color: var(--clr-text, #1a1917); font-family: var(--font-body, 'Inter', system-ui, sans-serif); overflow-x: hidden;">
   <!-- Topbalk -->
   <header class="sticky top-0 z-30" style="background-color: var(--clr-header-bg, rgba(250,250,248,0.92)); backdrop-filter: blur(8px); border-bottom: 1px solid var(--clr-border, #e8e6e0);">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height: 56px;">
 
-      <!-- Links: Roamly brand -->
-      <div class="flex items-center gap-3">
-        <button onclick={() => goto('/')} class="flex items-center gap-1.5 transition-opacity hover:opacity-80">
+      <!-- Links: Roamly brand + trip selector (hidden on mobile) -->
+      <div class="flex items-center gap-3 min-w-0">
+        <button onclick={() => goto('/')} class="flex items-center gap-1.5 transition-opacity hover:opacity-80 flex-shrink-0">
           <span class="text-sm font-semibold" style="color: #0d9488; letter-spacing: -0.01em;">Roamly</span>
         </button>
 
-        <!-- Scheidingsteken -->
-        <span style="color: #d4d1c8; font-size: 0.9rem;">/</span>
+        <!-- Scheidingsteken: desktop only -->
+        <span class="hidden sm:inline" style="color: #d4d1c8; font-size: 0.9rem;">/</span>
 
-        <!-- Huidige reis dropdown -->
+        <!-- Huidige reis dropdown: visible on all screen sizes, narrower on mobile -->
         <div class="relative">
           <button
             onclick={() => { tripMenuOpen = !tripMenuOpen; }}
             class="flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 transition-colors"
             style="color: #57564f; background-color: {tripMenuOpen ? '#f0eeea' : 'transparent'};"
           >
-            <span class="font-medium" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span class="font-medium sm:hidden" style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {$trip.name}
+            </span>
+            <span class="font-medium hidden sm:inline" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
               {$trip.name}
             </span>
             <!-- Chevron -->
@@ -233,7 +248,7 @@
       </div>
 
       <!-- Rechts: nav + auth -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 flex-shrink-0">
         <!-- Reis / Dag segmented switch -->
         <div
           style="
@@ -243,14 +258,14 @@
           "
         >
           <a
-            href="/"
+            href="/overview"
             style="
-              padding: 4px 12px; border-radius: 8px;
-              font-size: 11px; font-weight: {isOnReis ? '600' : '400'};
+              padding: 4px 10px; border-radius: 8px;
+              font-size: 11px; font-weight: {isReisSectionActive ? '600' : '400'};
               text-decoration: none; white-space: nowrap;
-              background: {isOnReis ? 'white' : 'transparent'};
-              color: {isOnReis ? '#0f766e' : '#8b8a84'};
-              box-shadow: {isOnReis ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
+              background: {isReisSectionActive ? 'white' : 'transparent'};
+              color: {isReisSectionActive ? '#0f766e' : '#8b8a84'};
+              box-shadow: {isReisSectionActive ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
               transition: background 0.15s, color 0.15s, box-shadow 0.15s;
             "
           >Reis</a>
@@ -258,7 +273,7 @@
             <a
               href="/day/{dagLinkId}"
               style="
-                padding: 4px 12px; border-radius: 8px;
+                padding: 4px 10px; border-radius: 8px;
                 font-size: 11px; font-weight: {isOnDag ? '600' : '400'};
                 text-decoration: none; white-space: nowrap;
                 background: {isOnDag ? 'white' : 'transparent'};
@@ -270,18 +285,19 @@
           {/if}
         </div>
 
-        <!-- Instellingen -->
+        <!-- Instellingen: hidden on mobile, shown on sm+ -->
         <button
           onclick={() => { settingsOpen = true; }}
-          class="w-7 h-7 flex items-center justify-center rounded-xl transition-colors"
+          class="hidden sm:flex w-7 h-7 items-center justify-center rounded-xl transition-colors"
           style="color: #8b8a84;"
           title="Instellingen"
           onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt, #f4f3ef)'; }}
           onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
         >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4">
-            <circle cx="7.5" cy="7.5" r="2.2"/>
-            <path d="M7.5 1v1.5M7.5 12.5V14M14 7.5h-1.5M2.5 7.5H1M12.2 2.8l-1.1 1.1M3.9 11.1l-1.1 1.1M12.2 12.2l-1.1-1.1M3.9 3.9L2.8 2.8"/>
+          <!-- Proper gear/cog icon (not a sun) -->
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </button>
 
@@ -297,38 +313,56 @@
         {#if !$authReady}
           <div class="w-7 h-7 rounded-full animate-pulse" style="background-color: #e8e6e0;"></div>
         {:else if $user}
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
+            <!-- Avatar: always visible -->
             {#if $user.photoURL}
-              <img src={$user.photoURL} alt="Profiel" class="w-7 h-7 rounded-full object-cover" referrerpolicy="no-referrer" />
+              <img src={$user.photoURL} alt="Profiel" class="w-7 h-7 rounded-full object-cover flex-shrink-0" referrerpolicy="no-referrer" />
             {:else}
-              <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+              <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
                 style="background-color: #ccfbf1; color: #0d9488;">
                 {($user.displayName ?? 'G')[0]}
               </div>
             {/if}
+            <!-- "Uitloggen" text: hidden on mobile -->
             <button
               onclick={handleLogout}
-              class="text-xs px-3 py-1.5 rounded-xl transition-colors"
+              class="hidden sm:block text-xs px-3 py-1.5 rounded-xl transition-colors"
               style="color: #8b8a84;"
             >Uitloggen</button>
+            <!-- Settings on mobile: shown next to avatar for logged-in users -->
+            <button
+              onclick={() => { settingsOpen = true; }}
+              class="sm:hidden w-7 h-7 flex items-center justify-center rounded-xl transition-colors"
+              style="color: #8b8a84;"
+              title="Instellingen"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
           </div>
         {:else}
+          <!-- Not logged in: show compact Google login button -->
           <button
             onclick={handleLogin}
             disabled={signingIn}
-            class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-medium transition-all"
-            style="background-color: #1a1917; color: white; opacity: {signingIn ? '0.6' : '1'};"
+            class="flex items-center gap-1.5 text-xs rounded-xl font-medium transition-all"
+            style="background-color: #1a1917; color: white; opacity: {signingIn ? '0.6' : '1'}; padding: 6px 10px;"
           >
             {#if signingIn}
-              Bezig…
+              <span class="hidden sm:inline">Bezig…</span>
+              <svg class="sm:hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                <circle cx="12" cy="12" r="9" stroke-dasharray="42" stroke-dashoffset="0" style="animation: spin 1s linear infinite;"/>
+              </svg>
             {:else}
-              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" class="flex-shrink-0">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
-              Inloggen
+              <span class="hidden sm:inline">Inloggen</span>
             {/if}
           </button>
         {/if}
@@ -336,11 +370,11 @@
     </div>
   </header>
 
-  <!-- Compact trip timeline: shown on day pages, click navigates to overview -->
-  {#if !isOnReis}
+  <!-- Compact trip timeline: only on day pages; marker = currently open day -->
+  {#if isOnDag}
     <div style="border-bottom: 1px solid var(--clr-border, #e8e6e0); background-color: var(--clr-header-bg, rgba(250,250,248,0.92)); backdrop-filter: blur(8px);">
       <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
-        <TripTimeline />
+        <TripTimeline markerDate={currentDayDate} />
       </div>
     </div>
   {/if}

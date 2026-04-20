@@ -2,6 +2,13 @@
   import { goto } from '$app/navigation';
   import { trip, locations } from '$lib/stores/trip';
 
+  /**
+   * Optional date to show as the marker tick (YYYY-MM-DD).
+   * On day pages this is the currently open day → "you are here".
+   * Falls back to today when not provided (home page / standalone use).
+   */
+  let { markerDate = null }: { markerDate?: string | null } = $props();
+
   // Map Tailwind color class → hex
   const colorMap: Record<string, string> = {
     'bg-teal-100':   '#14b8a6',
@@ -55,11 +62,12 @@
     return result;
   })());
 
-  // "Today" position as a percentage across the timeline
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayPct = $derived(
-    todayStr >= $trip.startDate && todayStr < $trip.endDate
-      ? (daysBetween($trip.startDate, todayStr) / totalDays) * 100
+  // Marker position: use the provided markerDate, otherwise fall back to today.
+  const todayStr  = new Date().toISOString().slice(0, 10);
+  const activeDate = $derived(markerDate ?? todayStr);
+  const todayPct  = $derived(
+    activeDate >= $trip.startDate && activeDate < $trip.endDate
+      ? (daysBetween($trip.startDate, activeDate) / totalDays) * 100
       : null
   );
 
@@ -76,8 +84,8 @@
   role="button"
   tabindex="0"
   title="Bekijk volledig reisoverzicht"
-  onclick={() => goto('/')}
-  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') goto('/'); }}
+  onclick={() => goto('/overview')}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') goto('/overview'); }}
   style="cursor: pointer; user-select: none; position: relative; padding: 3px 0;"
 >
   <!-- Colored bar -->

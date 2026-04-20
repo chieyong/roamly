@@ -138,7 +138,7 @@
   <div class="flex flex-col items-center justify-center py-32 text-center">
     <p class="text-3xl mb-3">🗺️</p>
     <p class="text-base font-medium" style="color: #2a2926;">Day not found</p>
-    <button onclick={() => goto('/')} class="mt-3 text-sm hover:underline" style="color: #14b8a6;">← Back</button>
+    <button onclick={() => goto('/overview')} class="mt-3 text-sm hover:underline" style="color: #14b8a6;">← Back</button>
   </div>
 
 {:else}
@@ -152,7 +152,7 @@
     <!-- ── Header (scrolls with page) ──────────────────────────────────── -->
     <div class="mb-5">
       <div class="flex items-center gap-1.5 mb-4 text-xs" style="color: #b0ada7;">
-        <button onclick={() => goto('/')} class="hover:underline transition-colors" style="color: #b0ada7;">
+        <button onclick={() => goto('/overview')} class="hover:underline transition-colors" style="color: #b0ada7;">
           ← {location?.name}
         </button>
         <span>·</span>
