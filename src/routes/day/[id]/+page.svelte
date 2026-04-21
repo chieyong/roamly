@@ -49,12 +49,11 @@
   );
 
   // ── Map state (driven by clicking activity cards) ──────────────────────────
-  // When the day changes, seed the map with the first activity that has a location.
+  // On day load: show only the city name — no specific activity label.
+  // Activity-specific focus is set by ActivityCard when the user expands a card.
   $effect(() => {
     dayId; // track day changes
-    const first = [...mornActivities, ...aftnActivities, ...evngActivities]
-      .find((a) => a.location && getCoord(a.location));
-    mapFocusLocation.set(first?.location ?? location?.name ?? null);
+    mapFocusLocation.set(location?.name ?? null);
   });
 
   const activeCoord = $derived<LatLng | null>(getCoord($mapFocusLocation));

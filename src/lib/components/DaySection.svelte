@@ -27,9 +27,12 @@
   const { label, emoji } = $derived(meta[section]);
   const isEmpty = $derived(sectionActivities.length === 0);
 
-  // DnD local copy
+  // DnD local copy — don't sync while dragging or finalising a drop
   let items = $state<Activity[]>([]);
-  $effect(() => { items = sectionActivities.map((a) => ({ ...a })); });
+  $effect(() => {
+    if (draggedId !== null || isFinalizing || isDropTarget) return;
+    items = sectionActivities.map((a) => ({ ...a }));
+  });
 
   // ── Add-activity state machine ───────────────────────────────────────────
   // idle → typing → enriching → preview → idle
@@ -102,19 +105,88 @@
   // ── Drag & drop ─────────────────────────────────────────────────────────
   let draggedId    = $state<string | null>(null);
   let isDropTarget = $state(false);
+  // Guard flag: prevents the $effect from resetting `items` while we're
+  // processing a drop (updateActivity calls would otherwise cause visual jumps).
+  let isFinalizing = $state(false);
+  // Long-press drag: disabled until the user holds for LONG_PRESS_MS (touch)
+  // or immediately for mouse.
+  let dragEnabled  = $state(false);
+  let dndzoneEl: HTMLElement | undefined;
+  const LONG_PRESS_MS = 350;
+
+  /** Initiate drag on long-press (touch) or immediately (mouse). */
+  function onItemPointerDown(e: PointerEvent) {
+    if (dragEnabled) return;
+
+    const startX  = e.clientX;
+    const startY  = e.clientY;
+    let cancelled = false;
+    const delayMs = e.pointerType === 'mouse' ? 0 : LONG_PRESS_MS;
+
+    const dispatchSynth = () => {
+      if (!dndzoneEl) return;
+      dndzoneEl.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, composed: true,
+        pointerId: e.pointerId, pointerType: e.pointerType,
+        clientX: startX, clientY: startY,
+        screenX: e.screenX, screenY: e.screenY,
+        isPrimary: e.isPrimary, pressure: 0.5, button: 0, buttons: 1,
+      }));
+    };
+
+    if (delayMs === 0) {
+      dragEnabled = true;
+      requestAnimationFrame(dispatchSynth);
+      return;
+    }
+
+    // Touch: wait for long-press, cancel if pointer moves > 8px
+    const cancel = () => {
+      if (cancelled) return;
+      cancelled = true;
+      clearTimeout(timer);
+      if (!dragEnabled) dragEnabled = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+      window.removeEventListener('pointercancel', cancel);
+    };
+
+    const onMove = (me: PointerEvent) => {
+      if (me.pointerId !== e.pointerId) return;
+      if (Math.hypot(me.clientX - startX, me.clientY - startY) > 8) cancel();
+    };
+    const onUp = () => cancel();
+
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      dragEnabled = true;
+      requestAnimationFrame(() => {
+        if (!dragEnabled) return;
+        dispatchSynth();
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup',   onUp);
+        window.removeEventListener('pointercancel', cancel);
+      });
+    }, delayMs);
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp, { once: true });
+    window.addEventListener('pointercancel', cancel, { once: true });
+  }
 
   function handleDndConsider(e: CustomEvent) {
     items        = e.detail.items;
-    draggedId    = e.detail.info?.id ?? null;
+    draggedId    = e.detail.info?.id ?? '__dragging__';
     isDropTarget = true;
   }
 
   function handleDndFinalize(e: CustomEvent) {
-    const newItems: Activity[]         = e.detail.items;
+    const newItems: Activity[]          = e.detail.items;
     const droppedId: string | undefined = e.detail.info?.id;
 
     draggedId    = null;
     isDropTarget = false;
+    dragEnabled  = false;
 
     const droppedIndex = droppedId
       ? newItems.findIndex((i) => i.id === droppedId)
@@ -131,9 +203,13 @@
       }
     }
 
+    // Set isFinalizing BEFORE store updates so the $effect doesn't fight us
+    isFinalizing = true;
     items = finalItems;
     finalItems.forEach((item) => updateActivity(item));
     reorderSection(dayId, section, finalItems.map((i) => i.id));
+    // Release after a tick so all reactive updates settle
+    setTimeout(() => { isFinalizing = false; }, 120);
   }
 </script>
 
@@ -159,7 +235,8 @@
 
   <!-- Activity list / drop zone -->
   <div
-    use:dndzone={{ items, dropTargetStyle: {}, flipDurationMs: 180 }}
+    bind:this={dndzoneEl}
+    use:dndzone={{ items, dropTargetStyle: {}, flipDurationMs: 180, dragDisabled: !dragEnabled }}
     onconsider={handleDndConsider}
     onfinalize={handleDndFinalize}
     class="space-y-1.5 rounded-2xl transition-all duration-200"
@@ -169,7 +246,14 @@
     role="list"
   >
     {#each items as item (item.id)}
-      <div animate:flip={{ duration: 180 }} class="relative" data-location={item.location ?? ''}>
+      <!-- onpointerdown: long-press (touch) or immediate (mouse) to enable drag -->
+      <div
+        animate:flip={{ duration: 180 }}
+        class="relative"
+        data-location={item.location ?? ''}
+        onpointerdown={onItemPointerDown}
+        style="touch-action: pan-y;"
+      >
         <ActivityCard
           activity={item}
           isDragging={draggedId === item.id}

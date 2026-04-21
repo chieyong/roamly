@@ -111,16 +111,27 @@
     return `${title} japan`.slice(0, 50);
   }
 
-  // source.unsplash.com was deprecated in 2022 — use Lorem Picsum with a
-  // deterministic seed so the same activity always shows the same photo.
+  // Build a loremflickr URL using keywords from getImageQuery.
+  // loremflickr.com supports tag-based image search and a deterministic `lock`
+  // parameter so the same activity always shows the same contextually relevant photo.
   function strHash(s: string): number {
     let h = 0;
     for (let i = 0; i < s.length; i++) { h = (Math.imul(31, h) + s.charCodeAt(i)) | 0; }
-    return Math.abs(h);
+    return Math.abs(h) % 10000;  // keep lock small (0–9999)
   }
-  const imageUrl = $derived(
-    `https://picsum.photos/seed/${strHash(getImageQuery(activity.title, activity.location))}/128/128`
-  );
+  function queryToTags(q: string): string {
+    const stop = new Set(['and', 'or', 'the', 'a', 'an', 'in', 'at', 'of', 'with', 'on', 'by']);
+    return q.split(' ')
+      .filter(w => w.length > 2 && !stop.has(w))
+      .slice(0, 3)
+      .join(',');
+  }
+  const imageUrl = $derived((() => {
+    const q     = getImageQuery(activity.title, activity.location);
+    const tags  = queryToTags(q);
+    const lock  = strHash(q);
+    return `https://loremflickr.com/128/128/${encodeURIComponent(tags)}?lock=${lock}`;
+  })());
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function focusEl(el: HTMLElement) { el.focus(); }
