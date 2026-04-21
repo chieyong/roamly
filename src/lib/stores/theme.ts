@@ -44,50 +44,84 @@ export interface ThemePreset {
   fontBodyId:   string;  // key from fontOptions
 }
 
-export const presets: ThemePreset[] = [
+export interface ThemePresetWithMode extends ThemePreset {
+  darkId: string;  // ID van de bijbehorende dark variant
+  isDark: boolean;
+}
+
+export const presets: ThemePresetWithMode[] = [
+  // ── Licht ────────────────────────────────────────────────────────────────
   {
-    id: 'ivory', name: 'Warm Ivory',
+    id: 'ivory', name: 'Warm Ivory', isDark: false, darkId: 'ivory-dark',
     bg: '#fafaf8', surface: '#ffffff', surfaceAlt: '#f4f3ef',
     border: '#e8e6e0', borderLight: '#f0eeea',
-    headerBg: 'rgba(250,250,248,0.92)',
+    headerBg: 'rgba(250,250,248,0.95)',
     text: '#1a1917', textMuted: '#a09e98', textSubtle: '#57564f',
     accent: '#0d9488', accentLight: '#f0fdfa',
     fontHeaderId: 'inter', fontBodyId: 'inter',
   },
   {
-    id: 'white', name: 'Clean White',
-    bg: '#ffffff', surface: '#f8f9fa', surfaceAlt: '#f1f3f5',
-    border: '#dee2e6', borderLight: '#e9ecef',
-    headerBg: 'rgba(255,255,255,0.92)',
-    text: '#212529', textMuted: '#868e96', textSubtle: '#495057',
-    accent: '#0d9488', accentLight: '#e6faf8',
-    fontHeaderId: 'inter', fontBodyId: 'inter',
-  },
-  {
-    id: 'slate', name: 'Cool Slate',
+    id: 'slate', name: 'Cool Slate', isDark: false, darkId: 'slate-dark',
     bg: '#f0f4f8', surface: '#ffffff', surfaceAlt: '#e2eaf2',
     border: '#c5d3e0', borderLight: '#dae4ed',
-    headerBg: 'rgba(240,244,248,0.92)',
+    headerBg: 'rgba(240,244,248,0.95)',
     text: '#1e293b', textMuted: '#64748b', textSubtle: '#334155',
     accent: '#3b82f6', accentLight: '#eff6ff',
     fontHeaderId: 'inter', fontBodyId: 'inter',
   },
   {
-    id: 'sage', name: 'Sage Green',
+    id: 'sage', name: 'Sage Green', isDark: false, darkId: 'sage-dark',
     bg: '#f2f7f2', surface: '#ffffff', surfaceAlt: '#e8f0e8',
     border: '#c4d4c4', borderLight: '#d8e8d8',
-    headerBg: 'rgba(242,247,242,0.92)',
+    headerBg: 'rgba(242,247,242,0.95)',
     text: '#1a2b1a', textMuted: '#6b8f6b', textSubtle: '#3d5c3d',
     accent: '#16a34a', accentLight: '#f0fdf4',
     fontHeaderId: 'inter', fontBodyId: 'inter',
   },
   {
-    id: 'midnight', name: 'Midnight',
-    bg: '#0f1117', surface: '#1a1d27', surfaceAlt: '#242836',
-    border: '#2d3348', borderLight: '#353c54',
-    headerBg: 'rgba(15,17,23,0.92)',
-    text: '#e8e9ed', textMuted: '#7b7f96', textSubtle: '#a8aabf',
-    accent: '#7c3aed', accentLight: '#2d1f4a',
+    id: 'rose', name: 'Rose Sand', isDark: false, darkId: 'rose-dark',
+    bg: '#fdf6f4', surface: '#ffffff', surfaceAlt: '#f5ebe8',
+    border: '#e8d4ce', borderLight: '#f0e0db',
+    headerBg: 'rgba(253,246,244,0.95)',
+    text: '#2c1810', textMuted: '#a07868', textSubtle: '#6b4035',
+    accent: '#e05c3a', accentLight: '#fef0ec',
+    fontHeaderId: 'inter', fontBodyId: 'inter',
+  },
+  // ── Donker ───────────────────────────────────────────────────────────────
+  {
+    id: 'ivory-dark', name: 'Warm Ivory', isDark: true, darkId: 'ivory',
+    bg: '#1a1917', surface: '#242220', surfaceAlt: '#2e2c29',
+    border: '#3a3835', borderLight: '#2e2c29',
+    headerBg: 'rgba(26,25,23,0.95)',
+    text: '#f0eeea', textMuted: '#7d7b75', textSubtle: '#b0ada7',
+    accent: '#14b8a6', accentLight: '#0d2e2b',
+    fontHeaderId: 'inter', fontBodyId: 'inter',
+  },
+  {
+    id: 'slate-dark', name: 'Cool Slate', isDark: true, darkId: 'slate',
+    bg: '#0f1520', surface: '#162035', surfaceAlt: '#1c2840',
+    border: '#253050', borderLight: '#1c2840',
+    headerBg: 'rgba(15,21,32,0.95)',
+    text: '#e2eaf5', textMuted: '#5a6a8a', textSubtle: '#8898bb',
+    accent: '#60a5fa', accentLight: '#172040',
+    fontHeaderId: 'inter', fontBodyId: 'inter',
+  },
+  {
+    id: 'sage-dark', name: 'Sage Green', isDark: true, darkId: 'sage',
+    bg: '#0f1a10', surface: '#162317', surfaceAlt: '#1c2e1e',
+    border: '#253c27', borderLight: '#1c2e1e',
+    headerBg: 'rgba(15,26,16,0.95)',
+    text: '#e0ece0', textMuted: '#5a7a5c', textSubtle: '#88a88a',
+    accent: '#4ade80', accentLight: '#0d2e10',
+    fontHeaderId: 'inter', fontBodyId: 'inter',
+  },
+  {
+    id: 'rose-dark', name: 'Rose Sand', isDark: true, darkId: 'rose',
+    bg: '#1e1210', surface: '#2a1a17', surfaceAlt: '#33211e',
+    border: '#4a2e28', borderLight: '#33211e',
+    headerBg: 'rgba(30,18,16,0.95)',
+    text: '#f0e8e4', textMuted: '#8a6055', textSubtle: '#c09080',
+    accent: '#f87a5a', accentLight: '#3d1a12',
     fontHeaderId: 'inter', fontBodyId: 'inter',
   },
 ];

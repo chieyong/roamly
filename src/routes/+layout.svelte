@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { trip, allTrips, activeTripId, switchTrip, enableFirestoreSync, disableFirestoreSync, days } from '$lib/stores/trip';
+  import { trip, allTrips, activeTripId, switchTrip, enableFirestoreSync, disableFirestoreSync, days, locations } from '$lib/stores/trip';
   import { user, authReady } from '$lib/stores/auth';
   import { signInWithGoogle, signOutUser } from '$lib/firebase/auth';
   import { aiQuotaRemaining, MAX_GUEST_CALLS } from '$lib/stores/aiQuota';
@@ -62,13 +62,29 @@
   const isOnReis = $derived($page.url.pathname === '/overview');
   const isOnDag  = $derived($page.url.pathname.startsWith('/day/'));
 
-  // "Reis" nav button is visually active on both the home page AND the /overview page
-  const isReisSectionActive = $derived(isOnHome || isOnReis);
-
   // Date of the currently open day (for the TripTimeline marker on day pages)
   const currentDayId   = $derived(isOnDag ? ($page.params.id ?? null) : null);
   const currentDayDate = $derived(
     currentDayId ? ($days.find(d => d.id === currentDayId)?.date ?? null) : null
+  );
+
+  // Current city location (for Dag page background color)
+  const currentLocationId = $derived(
+    isOnDag && currentDayId
+      ? ($days.find(d => d.id === currentDayId)?.locationId ?? null)
+      : null
+  );
+  const currentLocation = $derived(
+    currentLocationId ? $locations.find(l => l.id === currentLocationId) : null
+  );
+
+  // Page background:
+  // - Dag: pastel city color (from location.pageColor) if available, else theme bg
+  // - Home / Reis: neutral theme background
+  const pageBg = $derived(
+    isOnDag && currentLocation?.pageColor
+      ? currentLocation.pageColor
+      : 'var(--clr-bg)'
   );
 
   /**
@@ -103,26 +119,26 @@
   <SettingsModal onClose={() => { settingsOpen = false; }} />
 {/if}
 
-<div class="min-h-screen" data-theme={$currentTheme.id} style="background-color: var(--clr-bg, #fafaf8); color: var(--clr-text, #1a1917); font-family: var(--font-body, 'Inter', system-ui, sans-serif); overflow-x: hidden;">
+<div class="min-h-screen" data-theme={$currentTheme.id} style="background-color: {pageBg}; color: var(--clr-text); font-family: var(--font-body, 'Inter', system-ui, sans-serif); overflow-x: hidden; transition: background-color 0.3s ease;">
   <!-- Topbalk -->
-  <header class="sticky top-0 z-30" style="background-color: var(--clr-header-bg, rgba(250,250,248,0.92)); backdrop-filter: blur(8px); border-bottom: 1px solid var(--clr-border, #e8e6e0);">
+  <header class="sticky top-0 z-30" style="background-color: {pageBg}; border-bottom: 1px solid var(--clr-border); transition: background-color 0.3s ease;">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height: 56px;">
 
-      <!-- Links: Roamly brand + trip selector (hidden on mobile) -->
+      <!-- Links: Roamly brand + trip selector -->
       <div class="flex items-center gap-3 min-w-0">
         <button onclick={() => goto('/')} class="flex items-center gap-1.5 transition-opacity hover:opacity-80 flex-shrink-0">
-          <span class="text-sm font-semibold" style="color: #0d9488; letter-spacing: -0.01em;">Roamly</span>
+          <span class="text-sm font-semibold" style="color: var(--clr-accent); letter-spacing: -0.01em;">Roamly</span>
         </button>
 
         <!-- Scheidingsteken: desktop only -->
-        <span class="hidden sm:inline" style="color: #d4d1c8; font-size: 0.9rem;">/</span>
+        <span class="hidden sm:inline" style="color: var(--clr-border); font-size: 0.9rem;">/</span>
 
-        <!-- Huidige reis dropdown: visible on all screen sizes, narrower on mobile -->
+        <!-- Huidige reis dropdown -->
         <div class="relative">
           <button
             onclick={() => { tripMenuOpen = !tripMenuOpen; }}
             class="flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 transition-colors"
-            style="color: #57564f; background-color: {tripMenuOpen ? '#f0eeea' : 'transparent'};"
+            style="color: var(--clr-subtle); background-color: {tripMenuOpen ? 'var(--clr-surface-alt)' : 'transparent'};"
           >
             <span class="font-medium sm:hidden" style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
               {$trip.name}
@@ -131,7 +147,7 @@
               {$trip.name}
             </span>
             <!-- Chevron -->
-            <svg class="w-3 h-3 flex-shrink-0 transition-transform" style="color: #a09e98; transform: {tripMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)'};" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg class="w-3 h-3 flex-shrink-0 transition-transform" style="color: var(--clr-muted); transform: {tripMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)'};" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M2 4l4 4 4-4"/>
             </svg>
           </button>
@@ -148,12 +164,12 @@
             <!-- Dropdown menu -->
             <div
               class="absolute left-0 mt-1 rounded-2xl z-20 max-h-96 overflow-y-auto"
-              style="background: white; border: 1px solid #e8e6e0; box-shadow: 0 4px 20px rgba(0,0,0,0.10); min-width: 280px; top: 100%;"
+              style="background: var(--clr-surface); border: 1px solid var(--clr-border); box-shadow: 0 4px 20px rgba(0,0,0,0.12); min-width: 280px; top: 100%;"
             >
               <!-- "Mijn reizen" section header -->
               {#if upcomingTrips.length > 0}
-                <div class="px-4 py-2" style="border-bottom: 1px solid #f0eeea;">
-                  <p class="text-xs font-semibold uppercase tracking-wide" style="color: #a09e98; letter-spacing: 0.05em;">Mijn reizen</p>
+                <div class="px-4 py-2" style="border-bottom: 1px solid var(--clr-border-light);">
+                  <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--clr-muted); letter-spacing: 0.05em;">Mijn reizen</p>
                 </div>
 
                 <!-- Upcoming trips list -->
@@ -162,18 +178,18 @@
                     <button
                       onclick={() => { tripMenuOpen = false; switchTrip(t.id); }}
                       class="w-full flex items-center justify-between gap-2 px-4 py-2 text-xs transition-colors text-left"
-                      style="background-color: {$activeTripId === t.id ? '#f0eeea' : 'transparent'}; color: #57564f;"
-                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
-                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = $activeTripId === t.id ? '#f0eeea' : 'transparent'; }}
+                      style="background-color: {$activeTripId === t.id ? 'var(--clr-surface-alt)' : 'transparent'}; color: var(--clr-subtle);"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt)'; }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = $activeTripId === t.id ? 'var(--clr-surface-alt)' : 'transparent'; }}
                     >
                       <div class="flex-1 min-w-0">
                         <p class="font-medium truncate">{t.name}</p>
-                        <p style="color: #a09e98; font-size: 0.7rem;">
+                        <p style="color: var(--clr-muted); font-size: 0.7rem;">
                           {formatDate(t.startDate)} – {formatDate(t.endDate)}
                         </p>
                       </div>
                       {#if $activeTripId === t.id}
-                        <span style="color: #0d9488; font-weight: bold;">✓</span>
+                        <span style="color: var(--clr-accent); font-weight: bold;">✓</span>
                       {/if}
                     </button>
                   {/each}
@@ -182,8 +198,8 @@
 
               <!-- "Archief" section header (only if there are archived trips) -->
               {#if archivedTrips.length > 0}
-                <div class="px-4 py-2" style="border-top: 1px solid #f0eeea; border-bottom: 1px solid #f0eeea;">
-                  <p class="text-xs font-semibold uppercase tracking-wide" style="color: #a09e98; letter-spacing: 0.05em;">Archief</p>
+                <div class="px-4 py-2" style="border-top: 1px solid var(--clr-border-light); border-bottom: 1px solid var(--clr-border-light);">
+                  <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--clr-muted); letter-spacing: 0.05em;">Archief</p>
                 </div>
 
                 <!-- Archived trips list -->
@@ -192,18 +208,18 @@
                     <button
                       onclick={() => { tripMenuOpen = false; switchTrip(t.id); }}
                       class="w-full flex items-center justify-between gap-2 px-4 py-2 text-xs transition-colors text-left"
-                      style="background-color: {$activeTripId === t.id ? '#f0eeea' : 'transparent'}; color: #57564f;"
-                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
-                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = $activeTripId === t.id ? '#f0eeea' : 'transparent'; }}
+                      style="background-color: {$activeTripId === t.id ? 'var(--clr-surface-alt)' : 'transparent'}; color: var(--clr-subtle);"
+                      onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt)'; }}
+                      onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = $activeTripId === t.id ? 'var(--clr-surface-alt)' : 'transparent'; }}
                     >
                       <div class="flex-1 min-w-0">
                         <p class="font-medium truncate">{t.name}</p>
-                        <p style="color: #a09e98; font-size: 0.7rem;">
+                        <p style="color: var(--clr-muted); font-size: 0.7rem;">
                           {formatDate(t.startDate)} – {formatDate(t.endDate)}
                         </p>
                       </div>
                       {#if $activeTripId === t.id}
-                        <span style="color: #0d9488; font-weight: bold;">✓</span>
+                        <span style="color: var(--clr-accent); font-weight: bold;">✓</span>
                       {/if}
                     </button>
                   {/each}
@@ -211,16 +227,15 @@
               {/if}
 
               <!-- Acties footer -->
-              <div class="py-1.5 border-t border-t-[#f0eeea]">
+              <div class="py-1.5" style="border-top: 1px solid var(--clr-border-light);">
                 <button
                   onclick={() => { tripMenuOpen = false; tripEditOpen = true; }}
                   class="w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors text-left"
-                  style="color: #57564f;"
-                  onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                  style="color: var(--clr-subtle);"
+                  onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt)'; }}
                   onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  <!-- Potlood icoon -->
-                  <svg class="w-3.5 h-3.5" style="color: #8b8a84;" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <svg class="w-3.5 h-3.5" style="color: var(--clr-muted);" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z"/>
                   </svg>
                   Reis bewerken
@@ -230,12 +245,11 @@
                   <button
                     onclick={() => { tripMenuOpen = false; newTripOpen = true; }}
                     class="w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors text-left"
-                    style="color: #57564f;"
-                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+                    style="color: var(--clr-subtle);"
+                    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt)'; }}
                     onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    <!-- Plus icoon -->
-                    <svg class="w-3.5 h-3.5" style="color: #8b8a84;" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <svg class="w-3.5 h-3.5" style="color: var(--clr-muted);" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                       <path d="M7 2v10M2 7h10"/>
                     </svg>
                     Nieuwe reis aanmaken
@@ -249,26 +263,38 @@
 
       <!-- Rechts: nav + auth -->
       <div class="flex items-center gap-2 flex-shrink-0">
-        <!-- Reis / Dag segmented switch -->
+        <!-- Home / Reis / Dag segmented nav -->
         <div
           style="
             display: flex; align-items: center;
-            background: var(--clr-surface-alt, #f0eeea);
+            background: var(--clr-surface-alt);
             border-radius: 10px; padding: 2px; gap: 1px;
           "
         >
           <a
+            href="/"
+            style="
+              padding: 4px 10px; border-radius: 8px;
+              font-size: 11px; font-weight: {isOnHome ? '600' : '400'};
+              text-decoration: none; white-space: nowrap;
+              background: {isOnHome ? 'var(--clr-accent-light)' : 'transparent'};
+              color: {isOnHome ? 'var(--clr-accent)' : 'var(--clr-muted)'};
+              box-shadow: {isOnHome ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
+              transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+            "
+          >Home</a>
+          <a
             href="/overview"
             style="
               padding: 4px 10px; border-radius: 8px;
-              font-size: 11px; font-weight: {isReisSectionActive ? '600' : '400'};
+              font-size: 11px; font-weight: {isOnReis ? '600' : '400'};
               text-decoration: none; white-space: nowrap;
-              background: {isReisSectionActive ? 'white' : 'transparent'};
-              color: {isReisSectionActive ? '#0f766e' : '#8b8a84'};
-              box-shadow: {isReisSectionActive ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
+              background: {isOnReis ? 'var(--clr-accent-light)' : 'transparent'};
+              color: {isOnReis ? 'var(--clr-accent)' : 'var(--clr-muted)'};
+              box-shadow: {isOnReis ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
               transition: background 0.15s, color 0.15s, box-shadow 0.15s;
             "
-          >Reis</a>
+          >All Cities</a>
           {#if dagLinkId}
             <a
               href="/day/{dagLinkId}"
@@ -276,12 +302,12 @@
                 padding: 4px 10px; border-radius: 8px;
                 font-size: 11px; font-weight: {isOnDag ? '600' : '400'};
                 text-decoration: none; white-space: nowrap;
-                background: {isOnDag ? 'white' : 'transparent'};
-                color: {isOnDag ? '#1a1917' : '#8b8a84'};
+                background: {isOnDag ? 'var(--clr-accent-light)' : 'transparent'};
+                color: {isOnDag ? 'var(--clr-accent)' : 'var(--clr-muted)'};
                 box-shadow: {isOnDag ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
                 transition: background 0.15s, color 0.15s, box-shadow 0.15s;
               "
-            >Dag</a>
+            >Per Day</a>
           {/if}
         </div>
 
@@ -289,12 +315,11 @@
         <button
           onclick={() => { settingsOpen = true; }}
           class="hidden sm:flex w-7 h-7 items-center justify-center rounded-xl transition-colors"
-          style="color: #8b8a84;"
+          style="color: var(--clr-muted);"
           title="Instellingen"
-          onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt, #f4f3ef)'; }}
+          onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt)'; }}
           onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
         >
-          <!-- Proper gear/cog icon (not a sun) -->
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -311,7 +336,7 @@
 
         <!-- Auth knop -->
         {#if !$authReady}
-          <div class="w-7 h-7 rounded-full animate-pulse" style="background-color: #e8e6e0;"></div>
+          <div class="w-7 h-7 rounded-full animate-pulse" style="background-color: var(--clr-surface-alt);"></div>
         {:else if $user}
           <div class="flex items-center gap-1.5">
             <!-- Avatar: always visible -->
@@ -319,7 +344,7 @@
               <img src={$user.photoURL} alt="Profiel" class="w-7 h-7 rounded-full object-cover flex-shrink-0" referrerpolicy="no-referrer" />
             {:else}
               <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                style="background-color: #ccfbf1; color: #0d9488;">
+                style="background-color: var(--clr-accent-light); color: var(--clr-accent);">
                 {($user.displayName ?? 'G')[0]}
               </div>
             {/if}
@@ -327,13 +352,13 @@
             <button
               onclick={handleLogout}
               class="hidden sm:block text-xs px-3 py-1.5 rounded-xl transition-colors"
-              style="color: #8b8a84;"
+              style="color: var(--clr-muted);"
             >Uitloggen</button>
             <!-- Settings on mobile: shown next to avatar for logged-in users -->
             <button
               onclick={() => { settingsOpen = true; }}
               class="sm:hidden w-7 h-7 flex items-center justify-center rounded-xl transition-colors"
-              style="color: #8b8a84;"
+              style="color: var(--clr-muted);"
               title="Instellingen"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -343,16 +368,16 @@
             </button>
           </div>
         {:else}
-          <!-- Not logged in: show compact Google login button -->
+          <!-- Not logged in: compact Google login button -->
           <button
             onclick={handleLogin}
             disabled={signingIn}
             class="flex items-center gap-1.5 text-xs rounded-xl font-medium transition-all"
-            style="background-color: #1a1917; color: white; opacity: {signingIn ? '0.6' : '1'}; padding: 6px 10px;"
+            style="background-color: var(--clr-text); color: var(--clr-bg); opacity: {signingIn ? '0.6' : '1'}; padding: 6px 10px;"
           >
             {#if signingIn}
               <span class="hidden sm:inline">Bezig…</span>
-              <svg class="sm:hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+              <svg class="sm:hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="9" stroke-dasharray="42" stroke-dashoffset="0" style="animation: spin 1s linear infinite;"/>
               </svg>
             {:else}
@@ -372,7 +397,7 @@
 
   <!-- Compact trip timeline: only on day pages; marker = currently open day -->
   {#if isOnDag}
-    <div style="border-bottom: 1px solid var(--clr-border, #e8e6e0); background-color: var(--clr-header-bg, rgba(250,250,248,0.92)); backdrop-filter: blur(8px);">
+    <div style="border-bottom: 1px solid var(--clr-border);">
       <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
         <TripTimeline markerDate={currentDayDate} />
       </div>

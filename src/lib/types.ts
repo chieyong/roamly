@@ -18,7 +18,8 @@ export interface Location {
   emoji: string;
   startDate: string;
   endDate: string;
-  color: string; // tailwind bg class
+  color: string;      // tailwind bg class (legacy / overview badge)
+  pageColor?: string; // hex color for the Dag-page background (pastel city color)
 }
 
 export interface Day {

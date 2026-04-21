@@ -171,8 +171,8 @@
 
 <!-- Backdrop -->
 <div
-  class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-  style="background-color: rgba(0,0,0,0.3); backdrop-filter: blur(2px);"
+  class="fixed inset-0 flex items-end sm:items-center justify-center p-4"
+  style="z-index: 1000; background-color: rgba(0,0,0,0.3); backdrop-filter: blur(2px);"
   role="dialog"
   aria-modal="true"
 >

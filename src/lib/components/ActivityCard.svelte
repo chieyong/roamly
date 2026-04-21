@@ -282,102 +282,115 @@
              border: 1px solid {expanded ? '#c4f1ea' : 'var(--clr-border, #ece9e4)'};
              {expanded ? 'border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent;' : ''}"
     >
-      <!-- Row 1: title + inline-editable time -->
-      <div class="flex items-baseline justify-between gap-3">
-        <span class="text-sm font-medium leading-snug flex-1 min-w-0 truncate" style="color: #1a1917;">
-          {activity.title}
-        </span>
+      <!-- Collapsed layout: [thumbnail links] [titel + subline midden] [tijd + duur rechts] -->
+      <div class="flex items-center gap-3">
 
-        <!-- Inline time editor -->
-        {#if inlineField === 'time'}
-          <input
-            type="time"
-            bind:value={inlineValue}
-            onblur={saveInlineEdit}
-            onkeydown={handleInlineKeydown}
-            use:focusEl
-            onclick={(e) => e.stopPropagation()}
-            class="text-xs font-medium tabular-nums text-center rounded-lg px-2 py-0.5 focus:outline-none flex-shrink-0"
-            style="color: #0d9488; background: #f0fdfa; border: 1px solid #a7f3d0; min-width: 72px;"
-          />
-        {:else if activity.time}
-          <span
-            role="button"
-            tabindex="0"
-            class="text-xs font-medium flex-shrink-0 tabular-nums rounded-lg px-1.5 py-0.5 cursor-pointer transition-colors"
-            style="color: #0d9488;"
-            onclick={(e) => startInlineEdit('time', e)}
-            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('time', e as unknown as MouseEvent); }}
-            title="Klik om starttijd aan te passen"
-            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f0fdfa'; }}
-            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            {to24h(activity.time)}
-          </span>
-        {:else if !isDragging}
-          <!-- Subtle "+ tijd" hint, only visible on hover -->
-          <span
-            role="button"
-            tabindex="0"
-            class="text-xs flex-shrink-0 rounded-lg px-1.5 py-0.5 cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            style="color: #c4bfb9;"
-            onclick={(e) => startInlineEdit('time', e)}
-            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('time', e as unknown as MouseEvent); }}
-            title="Starttijd toevoegen"
-            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.color = '#0d9488'; }}
-            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.color = '#c4bfb9'; }}
-          >
-            + tijd
-          </span>
-        {/if}
-      </div>
-
-      <!-- Row 2: subline + inline-editable duration -->
-      <div class="flex items-center justify-between gap-2 mt-0.5">
-        {#if subline()}
-          <p class="text-xs truncate flex-1" style="color: #a09e98;">{subline()}</p>
-        {:else}
-          <span class="flex-1"></span>
-        {/if}
-
-        <!-- Inline duration editor: range slider -->
-        {#if inlineField === 'duration'}
+        <!-- Mini-thumbnail helemaal links (alleen als ingeklapt) -->
+        {#if !expanded && !isDragging}
           <div
-            class="flex items-center gap-1.5 flex-shrink-0"
+            style="width: 38px; height: 38px; border-radius: 10px; overflow: hidden; flex-shrink: 0;"
             onclick={(e) => e.stopPropagation()}
           >
-            <input
-              type="range" min="15" max="480" step="15"
-              bind:value={inlineDurationMinutes}
-              onchange={saveInlineEdit}
-              style="width: 72px; accent-color: #14b8a6; cursor: pointer;"
+            <img
+              src={imageUrl}
+              alt=""
+              style="width: 100%; height: 100%; object-fit: cover; display: block;"
+              loading="lazy"
             />
-            <span class="text-xs tabular-nums" style="color: #a09e98; min-width: 30px;">
-              {minutesToLabel(inlineDurationMinutes)}
-            </span>
           </div>
-        {:else if activity.duration}
-          <span
-            role="button"
-            tabindex="0"
-            class="text-xs flex-shrink-0 rounded-lg px-1.5 py-0.5 cursor-pointer transition-colors"
-            style="color: #a09e98;"
-            onclick={(e) => startInlineEdit('duration', e)}
-            onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('duration', e as unknown as MouseEvent); }}
-            title="Klik om duur aan te passen"
-            onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
-            onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ⏱ {activity.duration}
+        {/if}
+
+        <!-- Titel + subline -->
+        <div class="flex-1 min-w-0">
+          <span class="text-sm font-medium leading-snug block truncate" style="color: #1a1917;">
+            {activity.title}
           </span>
-        {:else if !isDragging}
-          <!-- Subtle "+ duur" hint, only visible on hover -->
-          <span
-            role="button"
-            tabindex="0"
-            class="text-xs flex-shrink-0 rounded-lg px-1.5 py-0.5 cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            style="color: #c4bfb9;"
-            onclick={(e) => startInlineEdit('duration', e)}
+          {#if subline()}
+            <p class="text-xs truncate" style="color: #a09e98; margin-top: 1px;">{subline()}</p>
+          {/if}
+        </div>
+
+        <!-- Tijd + duur rechts -->
+        <div class="flex flex-col items-end gap-0.5 flex-shrink-0">
+          <!-- Inline time editor -->
+          {#if inlineField === 'time'}
+            <input
+              type="time"
+              bind:value={inlineValue}
+              onblur={saveInlineEdit}
+              onkeydown={handleInlineKeydown}
+              use:focusEl
+              onclick={(e) => e.stopPropagation()}
+              class="text-xs font-medium tabular-nums text-center rounded-lg px-2 py-0.5 focus:outline-none"
+              style="color: #0d9488; background: #f0fdfa; border: 1px solid #a7f3d0; min-width: 72px;"
+            />
+          {:else if activity.time}
+            <span
+              role="button"
+              tabindex="0"
+              class="text-xs font-medium tabular-nums rounded-lg px-1.5 py-0.5 cursor-pointer transition-colors"
+              style="color: #0d9488;"
+              onclick={(e) => startInlineEdit('time', e)}
+              onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('time', e as unknown as MouseEvent); }}
+              title="Klik om starttijd aan te passen"
+              onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f0fdfa'; }}
+              onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              {to24h(activity.time)}
+            </span>
+          {:else if !isDragging}
+            <span
+              role="button"
+              tabindex="0"
+              class="text-xs rounded-lg px-1.5 py-0.5 cursor-pointer transition-all opacity-0 group-hover:opacity-100"
+              style="color: #c4bfb9;"
+              onclick={(e) => startInlineEdit('time', e)}
+              onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('time', e as unknown as MouseEvent); }}
+              title="Starttijd toevoegen"
+              onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.color = '#0d9488'; }}
+              onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.color = '#c4bfb9'; }}
+            >
+              + tijd
+            </span>
+          {/if}
+
+          <!-- Inline duration editor: range slider -->
+          {#if inlineField === 'duration'}
+            <div
+              class="flex items-center gap-1.5"
+              onclick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="range" min="15" max="480" step="15"
+                bind:value={inlineDurationMinutes}
+                onchange={saveInlineEdit}
+                style="width: 64px; accent-color: #14b8a6; cursor: pointer;"
+              />
+              <span class="text-xs tabular-nums" style="color: #a09e98; min-width: 28px;">
+                {minutesToLabel(inlineDurationMinutes)}
+              </span>
+            </div>
+          {:else if activity.duration}
+            <span
+              role="button"
+              tabindex="0"
+              class="text-xs rounded-lg px-1.5 py-0.5 cursor-pointer transition-colors"
+              style="color: #b0ada7;"
+              onclick={(e) => startInlineEdit('duration', e)}
+              onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('duration', e as unknown as MouseEvent); }}
+              title="Klik om duur aan te passen"
+              onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f4f3ef'; }}
+              onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              {activity.duration}
+            </span>
+          {:else if !isDragging}
+            <span
+              role="button"
+              tabindex="0"
+              class="text-xs rounded-lg px-1.5 py-0.5 cursor-pointer transition-all opacity-0 group-hover:opacity-100"
+              style="color: #c4bfb9;"
+              onclick={(e) => startInlineEdit('duration', e)}
             onkeydown={(e) => { if (e.key === 'Enter') startInlineEdit('duration', e as unknown as MouseEvent); }}
             title="Duur toevoegen"
             onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.color = '#a09e98'; }}
@@ -402,7 +415,7 @@
         >
           <!-- Image + details row -->
           <div class="flex gap-3 mb-3">
-            <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 10px; overflow: hidden;">
+            <div style="flex-shrink: 0; width: 84px; height: 84px; border-radius: 12px; overflow: hidden;">
               <img
                 src={imageUrl}
                 alt={activity.title}
@@ -446,5 +459,6 @@
         </div>
       {/if}
     {/if}
+  </div>
   {/if}
 </div>

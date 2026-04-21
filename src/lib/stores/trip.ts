@@ -22,7 +22,7 @@ function lsWrite(key: string, value: unknown) {
 
 // ─── Mock data versioning ─────────────────────────────────────────────────────
 // Bump this whenever mockData.ts changes so localStorage cache is cleared.
-const MOCK_DATA_VERSION = 3;
+const MOCK_DATA_VERSION = 5;
 
 // ─── Multi-trip architecture ──────────────────────────────────────────────────
 

@@ -132,6 +132,27 @@
     { cls: 'bg-green-100',  hex: '#22c55e' },
   ];
 
+  // ── Collapse / expand cities ─────────────────────────────────────────────────
+
+  /** IDs of cities that are expanded. Starts empty = all collapsed. */
+  let expandedCities = $state<Set<string>>(new Set());
+
+  function toggleCity(id: string) {
+    const next = new Set(expandedCities);
+    if (next.has(id)) { next.delete(id); } else { next.add(id); }
+    expandedCities = next;
+  }
+
+  function expandAll() {
+    expandedCities = new Set($locations.map(l => l.id));
+  }
+
+  function collapseAll() {
+    expandedCities = new Set();
+  }
+
+  const allExpanded = $derived(expandedCities.size === $locations.length && $locations.length > 0);
+
   // ── Inline "Stad toevoegen" form ─────────────────────────────────────────────
 
   let addCityOpen  = $state(false);
@@ -258,6 +279,7 @@
    * PointerEvent is dispatched on the dndzone container so it can start
    * the drag even though the initial pointerdown happened while dragDisabled=true.
    */
+  // Long-press for touch (350ms), direct drag for mouse
   const LONG_PRESS_MS = 350;
 
   function onCityHeaderPointerDown(e: PointerEvent, cardId: string) {
@@ -267,6 +289,31 @@
     const startY = e.clientY;
     let cancelled = false;
 
+    // Mouse: geen wachttijd — direct starten
+    const delayMs = e.pointerType === 'mouse' ? 0 : LONG_PRESS_MS;
+
+    if (delayMs === 0) {
+      // Direct drag voor desktop
+      activatingCityId = null;
+      cityDragEnabled  = true;
+      requestAnimationFrame(() => {
+        if (!dndzoneContainerEl) return;
+        const synth = new PointerEvent('pointerdown', {
+          bubbles: true, cancelable: true, composed: true,
+          pointerId:   e.pointerId,
+          pointerType: e.pointerType,
+          clientX:  startX,    clientY:  startY,
+          screenX:  e.screenX, screenY:  e.screenY,
+          isPrimary: e.isPrimary,
+          pressure: 0.5,
+          button: 0, buttons: 1,
+        });
+        dndzoneContainerEl.dispatchEvent(synth);
+      });
+      return;
+    }
+
+    // Touch: long-press met bewegingsdrempel
     activatingCityId = cardId;
 
     const cancel = () => {
@@ -282,8 +329,8 @@
 
     const onMove = (me: PointerEvent) => {
       if (me.pointerId !== e.pointerId) return;
-      const d = Math.sqrt((me.clientX - startX) ** 2 + (me.clientY - startY) ** 2);
-      if (d > 8) cancel();
+      const dist = Math.sqrt((me.clientX - startX) ** 2 + (me.clientY - startY) ** 2);
+      if (dist > 8) cancel();
     };
 
     const onUp = () => cancel();
@@ -292,9 +339,6 @@
       if (cancelled) return;
       activatingCityId = null;
       cityDragEnabled  = true;
-
-      // Give Svelte one frame to flush the dragDisabled:false update to the dndzone
-      // directive, then re-dispatch a synthetic pointerdown so dndzone can start the drag.
       requestAnimationFrame(() => {
         if (!dndzoneContainerEl || !cityDragEnabled) return;
         const synth = new PointerEvent('pointerdown', {
@@ -309,11 +353,10 @@
         });
         dndzoneContainerEl.dispatchEvent(synth);
       });
-
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup',   onUp);
       window.removeEventListener('pointercancel', cancel);
-    }, LONG_PRESS_MS);
+    }, delayMs);
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup',   onUp, { once: true });
@@ -547,6 +590,28 @@
   <!-- Timeline -->
   <div class="lg:col-span-2">
 
+    <!-- ── Expand / collapse all ─────────────────────────────────────────────── -->
+    {#if $locations.length > 0}
+      <div class="flex justify-end mb-3">
+        <button
+          onclick={allExpanded ? collapseAll : expandAll}
+          class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-colors"
+          style="color: var(--clr-muted, #8b8a84); background: var(--clr-surface-alt, #f0eeea);"
+          onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#e4e1db'; }}
+          onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--clr-surface-alt, #f0eeea)'; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+            {#if allExpanded}
+              <path d="M2 4l4-3 4 3M2 9l4-3 4 3"/>
+            {:else}
+              <path d="M2 3l4 3 4-3M2 8l4 3 4-3"/>
+            {/if}
+          </svg>
+          {allExpanded ? 'Alles inklappen' : 'Alles uitklappen'}
+        </button>
+      </div>
+    {/if}
+
     <!-- ── City sections: DnD-sortable (issue 3) ──────────────────────────────── -->
     <div
       bind:this={dndzoneContainerEl}
@@ -578,7 +643,7 @@
 
             <!-- City header row: long-press anywhere here to start dragging -->
             <div
-              class="flex items-center gap-1.5 mb-2 group"
+              class="flex items-center gap-1.5 mb-1 group"
               onpointerdown={editingLocationId !== location.id
                 ? (e) => onCityHeaderPointerDown(e, cityCard.id)
                 : undefined}
@@ -593,10 +658,11 @@
                 margin: -2px -4px -2px 0;
               "
             >
-              <!-- Drag handle dots: visual affordance only -->
+              <!-- Drag handle dots: sleep om stad te verplaatsen -->
               <div
                 class="opacity-30 lg:opacity-0 lg:group-hover:opacity-50 flex-shrink-0 transition-opacity pointer-events-none"
                 style="color: #a09e98; padding: 2px;"
+                title="Sleep om stad te verplaatsen"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
                   <circle cx="5.5" cy="4" r="1.2"/>
@@ -608,13 +674,30 @@
                 </svg>
               </div>
 
-              <!-- Clickable edit area: stop propagation so a tap doesn't trigger long-press -->
+              <!-- Expand/collapse toggle chevron (klikbaar) -->
               <button
-                onclick={() => editingLocationId === location.id ? cancelEditCity() : openEditCity(location)}
+                onclick={() => { toggleCity(location.id); if (editingLocationId) cancelEditCity(); }}
+                onpointerdown={(e) => e.stopPropagation()}
+                class="flex-shrink-0 w-6 h-6 flex items-center justify-center"
+                style="background: none; border: none; cursor: pointer; color: {cityColor(location.color)}; padding: 0;"
+                tabindex="-1"
+                aria-hidden="true"
+              >
+                <svg
+                  width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"
+                  style="transition: transform 0.2s; transform: {expandedCities.has(location.id) ? 'rotate(0deg)' : 'rotate(-90deg)'};"
+                >
+                  <path d="M2 4l4 4 4-4"/>
+                </svg>
+              </button>
+
+              <!-- Stadsrij: klikken = uitklappen/inklappen -->
+              <button
+                onclick={() => { toggleCity(location.id); if (editingLocationId) cancelEditCity(); }}
                 onpointerdown={(e) => e.stopPropagation()}
                 class="flex items-center gap-2 flex-1 text-left"
                 style="background: none; border: none; cursor: pointer; padding: 2px 0;"
-                title="Klik om te bewerken of verwijderen"
+                title={expandedCities.has(location.id) ? 'Inklappen' : 'Uitklappen'}
               >
                 <div
                   class="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -626,16 +709,25 @@
                 <span class="text-xs" style="color: var(--clr-muted, #a09e98);">
                   {formatDateShort(location.startDate)} – {formatDateShort(location.endDate)}
                   · {displayDays} {displayDays === 1 ? 'dag' : 'dagen'}
-                  · {displayNights} {displayNights === 1 ? 'overnachting' : 'overnachtingen'}
                 </span>
-                <svg
-                  class="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity"
-                  width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#8b8a84" stroke-width="1.5"
-                  style="transform: {editingLocationId === location.id ? 'rotate(180deg)' : 'rotate(0deg)'}; transition: transform 0.2s;"
-                >
-                  <path d="M2 4l4 4 4-4"/>
-                </svg>
               </button>
+
+              <!-- Potlood: verschijnt als stad open is, opent bewerkmodus -->
+              {#if expandedCities.has(location.id)}
+                <button
+                  onclick={(e) => { e.stopPropagation(); editingLocationId === location.id ? cancelEditCity() : openEditCity(location); }}
+                  onpointerdown={(e) => e.stopPropagation()}
+                  class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                  style="color: #a09e98; background: none; border: none; cursor: pointer;"
+                  title="Bewerken"
+                  onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = cityBadge(location.color); (e.currentTarget as HTMLElement).style.color = cityColor(location.color); }}
+                  onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#a09e98'; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z"/>
+                  </svg>
+                </button>
+              {/if}
             </div>
 
             <!-- Delete confirmation -->
@@ -718,11 +810,11 @@
                   >🗑</button>
                 </div>
               </div>
-            {:else}
+            {:else if expandedCities.has(location.id)}
               {@const travelDay = hasTravelDay && nextLocation ? $days.find(d => d.id === `day-${location.id}-${nextLocation.startDate}`) ?? null : null}
 
               <!-- Day rows -->
-              <div class="flex flex-col" style="margin-left: 4px;">
+              <div class="flex flex-col" style="margin-left: 4px; margin-bottom: 4px;">
                 {#each locationDays as day, i}
                   {@const depLoc = day.departureLocationId ? $locations.find(l => l.id === day.departureLocationId) : null}
                   {@const hasActivities = !!topActivity(day.id)}
@@ -750,8 +842,15 @@
                           {location.name}
                         </span>
                       {:else if hasActivities}
-                        <!-- Day summary: wijk · activiteiten -->
-                        <span class="text-xs truncate" style="color: var(--clr-subtle, #8b8a84);">{summary}</span>
+                        <!-- Day summary: wijk (bold) · activiteiten -->
+                        {@const parts = summary.split(' · ')}
+                        <span class="text-xs truncate" style="color: var(--clr-subtle, #8b8a84);">
+                          {#if parts.length > 1}
+                            <strong style="font-weight: 600; color: var(--clr-text, #1a1917);">{parts[0]}</strong>{' · ' + parts.slice(1).join(' · ')}
+                          {:else}
+                            {summary}
+                          {/if}
+                        </span>
                       {:else}
                         <!-- No activities yet -->
                         <span class="text-xs" style="color: #c5c2bc; font-style: italic;">Nog niets gepland</span>

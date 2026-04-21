@@ -1,16 +1,36 @@
 import type { Trip, Location, Day, Activity } from '$lib/types';
 
+// ─── Dynamic date helpers ──────────────────────────────────────────────────────
+// Trip always starts 10 days from today so the demo feels current.
+
+function tripStart(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function d(offsetDays: number): string {
+  const base = new Date(tripStart() + 'T00:00:00');
+  base.setDate(base.getDate() + offsetDays);
+  return base.toISOString().slice(0, 10);
+}
+
 // ─── Trip ─────────────────────────────────────────────────────────────────────
 
 export const mockTrip: Trip = {
   id: 'trip-japan-2024',
   name: 'Japan Spring 2026',
-  startDate: '2026-04-10',
-  endDate: '2026-04-24',
+  startDate: d(0),   // vandaag + 10
+  endDate:   d(14),  // vandaag + 24
   coverEmoji: '🌸'
 };
 
 // ─── Locations ────────────────────────────────────────────────────────────────
+// Tokyo: D+0 → D+5  (5 dagen)
+// Hakone: D+5 → D+7  (2 dagen)
+// Kyoto:  D+7 → D+12 (5 dagen)
+// Osaka:  D+12 → D+14 (2 dagen)
 
 export const mockLocations: Location[] = [
   {
@@ -19,9 +39,10 @@ export const mockLocations: Location[] = [
     name: 'Tokyo',
     country: 'Japan',
     emoji: '🗼',
-    startDate: '2026-04-10',
-    endDate: '2026-04-15',
-    color: 'bg-teal-100'
+    startDate: d(0),
+    endDate:   d(5),
+    color: 'bg-teal-100',
+    pageColor: '#e2f8f5',   // zachte mint
   },
   {
     id: 'loc-hakone',
@@ -29,9 +50,10 @@ export const mockLocations: Location[] = [
     name: 'Hakone',
     country: 'Japan',
     emoji: '🗻',
-    startDate: '2026-04-15',
-    endDate: '2026-04-17',
-    color: 'bg-blue-100'
+    startDate: d(5),
+    endDate:   d(7),
+    color: 'bg-blue-100',
+    pageColor: '#e8f0fc',   // licht ijsblauw
   },
   {
     id: 'loc-kyoto',
@@ -39,9 +61,10 @@ export const mockLocations: Location[] = [
     name: 'Kyoto',
     country: 'Japan',
     emoji: '⛩️',
-    startDate: '2026-04-17',
-    endDate: '2026-04-22',
-    color: 'bg-amber-100'
+    startDate: d(7),
+    endDate:   d(12),
+    color: 'bg-amber-100',
+    pageColor: '#fdf5e4',   // warm gebroken wit / amber
   },
   {
     id: 'loc-osaka',
@@ -49,29 +72,30 @@ export const mockLocations: Location[] = [
     name: 'Osaka',
     country: 'Japan',
     emoji: '🏯',
-    startDate: '2026-04-22',
-    endDate: '2026-04-24',
-    color: 'bg-rose-100'
+    startDate: d(12),
+    endDate:   d(14),
+    color: 'bg-rose-100',
+    pageColor: '#fdeaea',   // zacht roze
   }
 ];
 
 // ─── Days ─────────────────────────────────────────────────────────────────────
 
 export const mockDays: Day[] = [
-  { id: 'day-1',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: '2026-04-10' },
-  { id: 'day-2',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: '2026-04-11' },
-  { id: 'day-3',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: '2026-04-12' },
-  { id: 'day-4',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: '2026-04-13' },
-  { id: 'day-5',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: '2026-04-14' },
-  { id: 'day-6',  tripId: 'trip-japan-2024', locationId: 'loc-hakone', date: '2026-04-15', departureLocationId: 'loc-tokyo' },
-  { id: 'day-7',  tripId: 'trip-japan-2024', locationId: 'loc-hakone', date: '2026-04-16' },
-  { id: 'day-8',  tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: '2026-04-17', departureLocationId: 'loc-hakone' },
-  { id: 'day-9',  tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: '2026-04-18' },
-  { id: 'day-10', tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: '2026-04-19' },
-  { id: 'day-11', tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: '2026-04-20' },
-  { id: 'day-12', tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: '2026-04-21' },
-  { id: 'day-13', tripId: 'trip-japan-2024', locationId: 'loc-osaka',  date: '2026-04-22', departureLocationId: 'loc-kyoto' },
-  { id: 'day-14', tripId: 'trip-japan-2024', locationId: 'loc-osaka',  date: '2026-04-23' },
+  { id: 'day-1',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: d(0)  },
+  { id: 'day-2',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: d(1)  },
+  { id: 'day-3',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: d(2)  },
+  { id: 'day-4',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: d(3)  },
+  { id: 'day-5',  tripId: 'trip-japan-2024', locationId: 'loc-tokyo',  date: d(4)  },
+  { id: 'day-6',  tripId: 'trip-japan-2024', locationId: 'loc-hakone', date: d(5)  },
+  { id: 'day-7',  tripId: 'trip-japan-2024', locationId: 'loc-hakone', date: d(6)  },
+  { id: 'day-8',  tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: d(7)  },
+  { id: 'day-9',  tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: d(8)  },
+  { id: 'day-10', tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: d(9)  },
+  { id: 'day-11', tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: d(10) },
+  { id: 'day-12', tripId: 'trip-japan-2024', locationId: 'loc-kyoto',  date: d(11) },
+  { id: 'day-13', tripId: 'trip-japan-2024', locationId: 'loc-osaka',  date: d(12) },
+  { id: 'day-14', tripId: 'trip-japan-2024', locationId: 'loc-osaka',  date: d(13) },
 ];
 
 // ─── Activities ───────────────────────────────────────────────────────────────
