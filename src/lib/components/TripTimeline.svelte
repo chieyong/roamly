@@ -171,7 +171,7 @@
         if (d) goto(`/day/${d.id}`);
       }
     }}
-    style="display: flex; height: 7px; border-radius: 4px; overflow: hidden; width: 100%; cursor: pointer;"
+    style="display: flex; height: 7px; border-radius: 4px; overflow: hidden; width: 100%; cursor: pointer; background-color: var(--clr-border, #e4e1db);"
   >
     {#each segments as seg, i}
       {#if seg.type === 'city'}
@@ -189,7 +189,7 @@
         <div
           style="
             width: {pct(seg)}%;
-            background-color: transparent;
+            background-color: var(--clr-border, #e4e1db);
             flex-shrink: 0;
           "
         ></div>

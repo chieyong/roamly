@@ -235,20 +235,33 @@
         style="background-color: var(--clr-bg, #fafaf8); border-color: var(--clr-border, #e8e6e0); color: var(--clr-text, #1a1917);"
       />
       <div class="flex gap-2">
-        <input
-          type="time"
-          bind:value={editTime}
-          onkeydown={handleKeydown}
-          class="w-24 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
-          style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
-        />
-        <input
-          bind:value={editLocation}
-          onkeydown={handleKeydown}
-          placeholder="Locatie of buurt"
-          class="flex-1 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
-          style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
-        />
+        <!-- Time -->
+        <div class="relative flex-shrink-0">
+          <input
+            type="time"
+            bind:value={editTime}
+            onkeydown={handleKeydown}
+            class="w-28 text-xs rounded-xl px-3 py-2 border focus:outline-none transition-colors"
+            style="background-color: #fafaf8; border-color: #e8e6e0; color: #2a2926;"
+          />
+        </div>
+        <!-- Location / address -->
+        <div
+          class="flex-1 flex items-center rounded-xl border px-3 gap-1.5 transition-colors"
+          style="background-color: #fafaf8; border-color: #e8e6e0;"
+        >
+          <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 12 12" fill="none" stroke="#b0ada7" stroke-width="1.5">
+            <circle cx="6" cy="5" r="2"/>
+            <path d="M6 2C4.3 2 3 3.3 3 5c0 2.5 3 5 3 5s3-2.5 3-5c0-1.7-1.3-3-3-3z"/>
+          </svg>
+          <input
+            bind:value={editLocation}
+            onkeydown={handleKeydown}
+            placeholder="Buurt of specifiek adres"
+            class="flex-1 text-xs py-2 focus:outline-none bg-transparent"
+            style="color: #2a2926;"
+          />
+        </div>
       </div>
       <!-- Duration slider -->
       <div class="flex items-center gap-3 px-3 py-2 rounded-xl" style="background: #fafaf8; border: 1px solid #e8e6e0;">

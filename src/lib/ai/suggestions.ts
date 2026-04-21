@@ -83,6 +83,82 @@ const TOKYO_NEIGHBORHOODS = [
   'Yanaka', 'Tsukiji', 'Toyosu', 'Odaiba', 'Kanda',
 ];
 
+/**
+ * Ordered list of [keywords[], canonical POI name] pairs.
+ * Checked before neighborhood fallback so specific POIs win over districts.
+ */
+const POI_KEYWORDS: Array<[string[], string]> = [
+  // ── Tokyo POIs ──────────────────────────────────────────────────────────
+  [['shibuya crossing', 'scramble crossing'],        'Shibuya Crossing'],
+  [['shibuya 109'],                                  'Shibuya 109'],
+  [['senso-ji', 'sensoji', 'asakusa temple'],        'Senso-ji'],
+  [['meiji shrine', 'meiji jingu', 'meiji jingū'],   'Meiji Shrine'],
+  [['shinjuku gyoen'],                               'Shinjuku Gyoen'],
+  [['tokyo tower'],                                  'Tokyo Tower'],
+  [['tokyo skytree', 'skytree'],                     'Tokyo Skytree'],
+  [['tsukiji fish market', 'tsukiji market'],        'Tsukiji Fish Market'],
+  [['toyosu market'],                                'Toyosu Market'],
+  [['teamlab planets', 'team lab planets'],          'teamLab Planets'],
+  [['teamlab borderless', 'team lab borderless'],    'teamLab Borderless'],
+  [['teamlab', 'team lab'],                          'teamLab Planets'],
+  [['roppongi hills'],                               'Roppongi Hills'],
+  [['mori art museum'],                              'Mori Art Museum'],
+  [['takeshita street', 'takeshita-dori'],           'Takeshita Street'],
+  [['nakameguro canal'],                             'Nakameguro Canal'],
+  [['golden gai'],                                   'Golden Gai'],
+  [['kabukicho'],                                    'Kabukicho'],
+  [['omoide yokocho', 'memory lane'],                'Omoide Yokocho'],
+  [['yanaka ginza'],                                 'Yanaka Ginza'],
+  [['hamarikyu', 'hamarikyu gardens'],               'Hamarikyu Gardens'],
+  [['imperial palace'],                              'Imperial Palace'],
+  [['yoyogi park'],                                  'Yoyogi Park'],
+  [['ueno zoo'],                                     'Ueno Zoo'],
+  [['ueno park'],                                    'Ueno Park'],
+  // ── Kyoto POIs ──────────────────────────────────────────────────────────
+  [['fushimi inari', 'inari taisha', 'torii gates'], 'Fushimi Inari'],
+  [['bamboo grove', 'bamboo forest', 'arashiyama bamboo'], 'Arashiyama Bamboo Grove'],
+  [['kinkaku-ji', 'kinkakuji', 'golden pavilion'],   'Kinkaku-ji'],
+  [["philosopher's path", 'philosophers path', 'tetsugaku'], "Philosopher's Path"],
+  [['kiyomizu-dera', 'kiyomizudera'],                'Kiyomizu-dera'],
+  [['nijo castle', 'nijo-jo'],                       'Nijo Castle'],
+  [['nishiki market'],                               'Nishiki Market'],
+  [['gion district', 'gion'],                        'Gion'],
+  [['tenryu-ji', 'tenryuji'],                        'Tenryu-ji'],
+  [['ryoan-ji', 'ryoanji'],                          'Ryoan-ji'],
+  [['pontocho'],                                     'Pontocho'],
+  // ── Osaka POIs ──────────────────────────────────────────────────────────
+  [['dotonbori'],                                    'Dotonbori'],
+  [['osaka castle'],                                 'Osaka Castle'],
+  [['kuromon ichiba', 'kuromon market'],             'Kuromon Ichiba'],
+  [['shinsaibashi'],                                 'Shinsaibashi'],
+  [['universal studios', 'usj'],                     'Universal Studios Japan'],
+  // ── Nara POIs ───────────────────────────────────────────────────────────
+  [['nara deer park', 'deer park'],                  'Nara Deer Park'],
+  [['todai-ji', 'todaiji'],                          'Todai-ji'],
+  // ── Hiroshima / Miyajima POIs ────────────────────────────────────────────
+  [['itsukushima shrine'],                           'Itsukushima Shrine'],
+  [['miyajima island', 'miyajima'],                  'Miyajima Island'],
+  [['peace memorial', 'atomic bomb dome'],           'Peace Memorial Park'],
+  // ── Hakone / Fuji POIs ───────────────────────────────────────────────────
+  [['hakone open air museum'],                       'Hakone Open Air Museum'],
+  [['lake ashi', 'ashinoko'],                        'Lake Ashi'],
+  [['mount fuji', 'mt fuji', 'mt. fuji', 'fuji-san'], 'Mount Fuji'],
+  [['hakone ropeway'],                               'Hakone Ropeway'],
+];
+
+/**
+ * Returns the most specific known location name for a given activity title,
+ * preferring specific POI names over neighborhood names.
+ */
+function inferLocation(text: string): string | null {
+  // 1. Check specific POIs first (longer, more precise match wins)
+  for (const [keywords, poi] of POI_KEYWORDS) {
+    if (keywords.some((k) => text.includes(k))) return poi;
+  }
+  // 2. Fall back to neighborhood
+  return TOKYO_NEIGHBORHOODS.find((n) => text.includes(n.toLowerCase())) ?? null;
+}
+
 // [ keywords[] , emoji ]
 const EMOJI_RULES: Array<[string[], string]> = [
   [['breakfast', 'brunch', 'pancake', 'egg'], '🍳'],
@@ -182,8 +258,7 @@ export async function enrichActivity(
 
   const text = title.toLowerCase();
 
-  const location =
-    TOKYO_NEIGHBORHOODS.find((n) => text.includes(n.toLowerCase())) ?? null;
+  const location = inferLocation(text);
 
   return {
     emoji:    inferEmoji(text),

@@ -116,6 +116,20 @@
     const next = (idx + dir + sectionOrder.length) % sectionOrder.length;
     focusSection.set(sectionOrder[next]);
   }
+
+  // ── City accent colour ────────────────────────────────────────────────────
+  // Maps the location's Tailwind color class to a saturated hex accent.
+  const CITY_COLOR_HEX: Record<string, string> = {
+    'bg-teal-100':   '#0d9488',
+    'bg-blue-100':   '#3b82f6',
+    'bg-amber-100':  '#d97706',
+    'bg-rose-100':   '#e11d48',
+    'bg-purple-100': '#9333ea',
+    'bg-green-100':  '#16a34a',
+  };
+  const cityColor = $derived(
+    location ? (CITY_COLOR_HEX[location.color] ?? '#14b8a6') : '#14b8a6'
+  );
 </script>
 
 {#if !day}
@@ -135,16 +149,29 @@
 
     <!-- ── Header (scrolls with page) ──────────────────────────────────── -->
     <div class="mb-5">
-      <div class="flex items-center gap-1.5 mb-4 text-xs" style="color: #b0ada7;">
-        <button onclick={() => goto('/overview')} class="hover:underline transition-colors" style="color: #b0ada7;">
-          ← {location?.name}
-        </button>
-        <span>·</span>
-        <span>Day {dayIndex + 1} of {locationDays.length}</span>
-      </div>
+
+      <!-- City accent: large coloured city name -->
+      {#if location}
+        <div class="flex items-center gap-2 mb-2">
+          <button
+            onclick={() => goto('/overview')}
+            class="flex items-center gap-2 group transition-opacity hover:opacity-75"
+            title="Terug naar overzicht"
+          >
+            <span class="text-2xl leading-none">{location.emoji}</span>
+            <span
+              class="font-bold tracking-tight leading-none"
+              style="font-size: 1.6rem; color: {cityColor}; letter-spacing: -0.03em; font-family: var(--font-header);"
+            >{location.name}</span>
+          </button>
+          <span class="text-xs" style="color: var(--clr-muted);">
+            dag {dayIndex + 1} / {locationDays.length}
+          </span>
+        </div>
+      {/if}
 
       <div class="flex items-start justify-between gap-3">
-        <h1 class="text-2xl font-semibold" style="color: var(--clr-text, #1a1917); letter-spacing: -0.02em; line-height: 1.2; font-family: var(--font-header);">
+        <h1 class="text-xl font-medium" style="color: var(--clr-subtle); letter-spacing: -0.01em; line-height: 1.3; font-family: var(--font-header);">
           {formatDate(day.date)}
         </h1>
 

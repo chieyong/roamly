@@ -79,14 +79,9 @@
     currentLocationId ? $locations.find(l => l.id === currentLocationId) : null
   );
 
-  // Page background:
-  // - Dag: pastel city color (from location.pageColor) if available, else theme bg
-  // - Home / Reis: neutral theme background
-  const pageBg = $derived(
-    isOnDag && currentLocation?.pageColor
-      ? currentLocation.pageColor
-      : 'var(--clr-bg)'
-  );
+  // Page background: always use the theme background so dark mode works correctly.
+  // City colour is now shown as an accent in the day-page header instead.
+  const pageBg = $derived('var(--clr-bg)');
 
   /**
    * The day ID to navigate to when clicking "Dag":
@@ -279,7 +274,7 @@
               font-size: 11px; font-weight: {isOnHome ? '600' : '400'};
               text-decoration: none; white-space: nowrap;
               background: {isOnHome ? 'var(--clr-accent-light)' : 'transparent'};
-              color: {isOnHome ? 'var(--clr-accent)' : 'var(--clr-muted)'};
+              color: {isOnHome ? 'var(--clr-accent)' : 'var(--clr-subtle)'};
               box-shadow: {isOnHome ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
               transition: background 0.15s, color 0.15s, box-shadow 0.15s;
             "
@@ -291,7 +286,7 @@
               font-size: 11px; font-weight: {isOnReis ? '600' : '400'};
               text-decoration: none; white-space: nowrap;
               background: {isOnReis ? 'var(--clr-accent-light)' : 'transparent'};
-              color: {isOnReis ? 'var(--clr-accent)' : 'var(--clr-muted)'};
+              color: {isOnReis ? 'var(--clr-accent)' : 'var(--clr-subtle)'};
               box-shadow: {isOnReis ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
               transition: background 0.15s, color 0.15s, box-shadow 0.15s;
             "
@@ -304,7 +299,7 @@
                 font-size: 11px; font-weight: {isOnDag ? '600' : '400'};
                 text-decoration: none; white-space: nowrap;
                 background: {isOnDag ? 'var(--clr-accent-light)' : 'transparent'};
-                color: {isOnDag ? 'var(--clr-accent)' : 'var(--clr-muted)'};
+                color: {isOnDag ? 'var(--clr-accent)' : 'var(--clr-subtle)'};
                 box-shadow: {isOnDag ? '0 1px 3px rgba(0,0,0,0.10)' : 'none'};
                 transition: background 0.15s, color 0.15s, box-shadow 0.15s;
               "
