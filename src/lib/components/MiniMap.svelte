@@ -29,6 +29,13 @@
 
     const center: LatLng = coord ?? TOKYO_CENTER;
 
+    // Clear any stale Leaflet state so re-mounting never throws
+    // "Map container is already initialized."
+    if (mapEl && (mapEl as any)._leaflet_id != null) {
+      delete (mapEl as any)._leaflet_id;
+    }
+
+    try {
     map = L.map(mapEl, {
       zoomControl:        false,
       attributionControl: false,
@@ -55,6 +62,9 @@
       if (coord) placeMarker(coord, map);
       mounted = true;
     }, 120);
+    } catch (err) {
+      console.warn('[MiniMap] Leaflet init failed:', err);
+    }
   });
 
   onDestroy(() => { map?.remove(); map = null; mounted = false; });

@@ -37,6 +37,15 @@
     const avgLat = points.reduce((s, p) => s + p.coord[0], 0) / points.length;
     const avgLng = points.reduce((s, p) => s + p.coord[1], 0) / points.length;
 
+    // Clear stale Leaflet state to avoid "already initialized" errors on re-mount.
+    // Just deleting _leaflet_id is enough — the previous instance was already
+    // cleaned up by onDestroy. Never call L.map(mapEl) here to "get" the old map,
+    // because mapEl might be null/unbound during a fast navigation.
+    if (mapEl && (mapEl as any)._leaflet_id != null) {
+      delete (mapEl as any)._leaflet_id;
+    }
+
+    try {
     map = L.map(mapEl, {
       zoomControl:        false,
       attributionControl: false,
@@ -56,59 +65,66 @@
 
     setTimeout(() => {
       if (!map || !L) return;
-      map.invalidateSize();
+      try {
+        map.invalidateSize();
 
-      // Dashed route line
-      L.polyline(
-        points.map((p) => p.coord),
-        { color: '#c4c1bb', weight: 1.5, opacity: 0.8, dashArray: '5, 8' }
-      ).addTo(map);
+        // Dashed route line
+        L.polyline(
+          points.map((p) => p.coord),
+          { color: '#c4c1bb', weight: 1.5, opacity: 0.8, dashArray: '5, 8' }
+        ).addTo(map);
 
-      // Numbered city markers + labels
-      points.forEach(({ loc, coord }, i) => {
-        const color = hex(loc);
+        // Numbered city markers + labels
+        points.forEach(({ loc, coord }, i) => {
+          const color = hex(loc);
 
-        // Numbered circle marker
-        const icon = L.divIcon({
-          html: `<div style="
-            width:26px;height:26px;
-            background:${color};
-            border:2.5px solid white;
-            border-radius:50%;
-            display:flex;align-items:center;justify-content:center;
-            font-size:11px;font-weight:700;color:white;
-            box-shadow:0 2px 6px rgba(0,0,0,0.18);
-            font-family:'Inter',sans-serif;
-            line-height:1;
-          ">${i + 1}</div>`,
-          className: '',
-          iconSize:   [26, 26],
-          iconAnchor: [13, 13],
+          // Numbered circle marker
+          const icon = L.divIcon({
+            html: `<div style="
+              width:26px;height:26px;
+              background:${color};
+              border:2.5px solid white;
+              border-radius:50%;
+              display:flex;align-items:center;justify-content:center;
+              font-size:11px;font-weight:700;color:white;
+              box-shadow:0 2px 6px rgba(0,0,0,0.18);
+              font-family:'Inter',sans-serif;
+              line-height:1;
+            ">${i + 1}</div>`,
+            className: '',
+            iconSize:   [26, 26],
+            iconAnchor: [13, 13],
+          });
+
+          L.marker(coord, { icon }).addTo(map);
+
+          // City name label (below marker)
+          const label = L.divIcon({
+            html: `<div style="
+              font-size:10px;font-weight:600;
+              color:${color};
+              font-family:'Inter',sans-serif;
+              white-space:nowrap;
+              text-shadow:0 0 3px white, 0 0 3px white;
+              margin-top:4px;
+            ">${loc.emoji} ${loc.name}</div>`,
+            className: '',
+            iconSize:   [80, 18],
+            iconAnchor: [-2, -6],
+          });
+          L.marker(coord, { icon: label }).addTo(map);
         });
 
-        L.marker(coord, { icon }).addTo(map);
-
-        // City name label (below marker)
-        const label = L.divIcon({
-          html: `<div style="
-            font-size:10px;font-weight:600;
-            color:${color};
-            font-family:'Inter',sans-serif;
-            white-space:nowrap;
-            text-shadow:0 0 3px white, 0 0 3px white;
-            margin-top:4px;
-          ">${loc.emoji} ${loc.name}</div>`,
-          className: '',
-          iconSize:   [80, 18],
-          iconAnchor: [-2, -6],
-        });
-        L.marker(coord, { icon: label }).addTo(map);
-      });
-
-      // Fit all markers with padding
-      const bounds = L.latLngBounds(points.map((p) => p.coord));
-      map.fitBounds(bounds, { padding: [28, 28] });
+        // Fit all markers with padding
+        const bounds = L.latLngBounds(points.map((p) => p.coord));
+        map.fitBounds(bounds, { padding: [28, 28] });
+      } catch (err) {
+        console.warn('[TripOverviewMap] render error:', err);
+      }
     }, 150);
+    } catch (err) {
+      console.warn('[TripOverviewMap] init error:', err);
+    }
   });
 
   onDestroy(() => { map?.remove(); map = null; });

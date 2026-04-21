@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentTheme, presets } from '$lib/stores/theme';
+  import { currentTheme, presets, fontOptions } from '$lib/stores/theme';
   import type { ThemePresetWithMode } from '$lib/stores/theme';
 
   let { onClose }: { onClose: () => void } = $props();
@@ -9,6 +9,11 @@
 
   // Thema's gefilterd op modus
   const visiblePresets = $derived(presets.filter(p => p.isDark === showDark));
+
+  /** Returns the CSS font-family stack for a preset's header font. */
+  function headerFontStack(fontId: string): string {
+    return fontOptions.find(f => f.id === fontId)?.stack ?? "'Inter', sans-serif";
+  }
 
   function applyPreset(preset: ThemePresetWithMode) {
     currentTheme.set({ ...preset });
@@ -100,7 +105,7 @@
     <!-- ── Thema's ──────────────────────────────────────────────────── -->
     <div>
       <p class="text-xs font-semibold mb-3 uppercase tracking-wide" style="color: #a09e98;">Thema</p>
-      <div class="grid grid-cols-2 gap-2.5">
+      <div class="flex flex-col gap-2.5">
         {#each visiblePresets as preset}
           {@const isActive = $currentTheme.id === preset.id}
           <button
@@ -108,31 +113,42 @@
             class="rounded-2xl overflow-hidden text-left transition-all"
             style="
               border: 2px solid {isActive ? preset.accent : preset.border};
-              box-shadow: {isActive ? `0 0 0 1px ${preset.accent}` : 'none'};
+              box-shadow: {isActive ? `0 0 0 2px ${preset.accent}40` : 'none'};
               outline: none;
             "
           >
-            <!-- Mini preview van het thema -->
-            <div style="background: {preset.bg}; padding: 10px 10px 6px;">
-              <!-- Header-balk simulatie -->
-              <div style="background: {preset.headerBg}; border-radius: 6px 6px 0 0; padding: 4px 7px; border-bottom: 1px solid {preset.border}; margin-bottom: 5px; display: flex; align-items: center; gap: 4px;">
-                <div style="width: 5px; height: 5px; border-radius: 50%; background: {preset.accent}; flex-shrink: 0;"></div>
-                <div style="height: 3px; width: 28px; border-radius: 2px; background: {preset.border};"></div>
+            <div style="display: flex; align-items: stretch;">
+              <!-- Colour swatch: accent stripe left -->
+              <div style="width: 6px; background: {preset.accent}; flex-shrink: 0;"></div>
+
+              <!-- Preview -->
+              <div style="background: {preset.bg}; flex: 1; padding: 10px 12px 10px 10px; display: flex; align-items: center; gap: 10px;">
+                <!-- Mini card stack -->
+                <div style="flex-shrink: 0; width: 44px;">
+                  <div style="background: {preset.surface}; border: 1px solid {preset.border}; border-radius: 6px; padding: 5px 6px; margin-bottom: 3px;">
+                    <div style="height: 3px; width: 30px; border-radius: 2px; background: {preset.text}; margin-bottom: 3px; opacity: 0.5;"></div>
+                    <div style="height: 3px; width: 20px; border-radius: 2px; background: {preset.textMuted}; opacity: 0.4;"></div>
+                  </div>
+                  <div style="height: 3px; width: 44px; border-radius: 2px; background: {preset.accent}; opacity: 0.7;"></div>
+                </div>
+
+                <!-- Name + tagline in theme font -->
+                <div style="flex: 1; min-width: 0;">
+                  <p style="font-size: 13px; font-weight: 700; color: {preset.text}; line-height: 1.2; font-family: {headerFontStack(preset.fontHeaderId)};">
+                    {preset.name}
+                  </p>
+                  <p style="font-size: 10px; color: {preset.textMuted}; margin-top: 2px; line-height: 1.3;">{preset.tagline}</p>
+                </div>
+
+                <!-- Active checkmark -->
+                {#if isActive}
+                  <div style="width: 18px; height: 18px; border-radius: 50%; background: {preset.accent}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2">
+                      <path d="M2 5l2 2 4-4"/>
+                    </svg>
+                  </div>
+                {/if}
               </div>
-              <!-- Kaart simulatie -->
-              <div style="background: {preset.surface}; border-radius: 6px; padding: 5px 7px; border: 1px solid {preset.border};">
-                <div style="height: 3px; width: 36px; border-radius: 2px; background: {preset.textMuted}; margin-bottom: 3px; opacity: 0.4;"></div>
-                <div style="height: 3px; width: 24px; border-radius: 2px; background: {preset.textMuted}; opacity: 0.25;"></div>
-              </div>
-            </div>
-            <!-- Label -->
-            <div style="background: {preset.surfaceAlt}; padding: 5px 10px 7px; border-top: 1px solid {preset.border};">
-              <p style="font-size: 11px; font-weight: 600; color: {preset.text}; line-height: 1.3;">{preset.name}</p>
-              {#if isActive}
-                <p style="font-size: 10px; color: {preset.accent}; margin-top: 1px;">Actief ✓</p>
-              {:else}
-                <p style="font-size: 10px; color: {preset.textMuted}; margin-top: 1px; opacity: 0;">&nbsp;</p>
-              {/if}
             </div>
           </button>
         {/each}

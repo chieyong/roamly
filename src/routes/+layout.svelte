@@ -429,12 +429,14 @@
     </div>
   </header>
 
-  <!-- Trip timeline strip: always visible; marker shows only on day pages -->
-  <div style="border-bottom: 1px solid var(--clr-border); background-color: {pageBg}; transition: background-color 0.3s ease;">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
-      <TripTimeline markerDate={isOnDag ? currentDayDate : null} />
+  <!-- Trip timeline strip: only shown on day pages -->
+  {#if isOnDag}
+    <div style="border-bottom: 1px solid var(--clr-border); background-color: var(--clr-bg); transition: background-color 0.3s ease;">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
+        <TripTimeline markerDate={currentDayDate} />
+      </div>
     </div>
-  </div>
+  {/if}
 
   <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
     {@render children()}
