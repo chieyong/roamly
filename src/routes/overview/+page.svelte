@@ -1018,7 +1018,7 @@
 
   <!-- Sidebar: kaart (desktop) + Maybe list -->
   <div class="lg:col-span-1">
-    <div class="sticky space-y-4" style="top: 72px;">
+    <div class="lg:sticky space-y-4" style="top: 72px;">
       <!-- Overzichtskaart — alleen op desktop in sidebar -->
       {#if isDesktop}
         <div style="height: 220px; border-radius: 18px; overflow: hidden; border: 1px solid var(--clr-border, #e8e6e0); box-shadow: 0 2px 12px rgba(0,0,0,0.06); background-color: var(--clr-surface-alt, #f4f3ef);">

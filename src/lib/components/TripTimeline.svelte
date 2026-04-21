@@ -92,7 +92,11 @@
     const daysIn = (clampedPct / 100) * totalDays;
     const targetDate = new Date($trip.startDate + 'T00:00:00');
     targetDate.setDate(targetDate.getDate() + Math.floor(daysIn));
-    const dateStr = targetDate.toISOString().slice(0, 10);
+    // Use local date parts to avoid UTC timezone offset shifting to the previous day
+    const y = targetDate.getFullYear();
+    const mo = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const dy = String(targetDate.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${mo}-${dy}`;
     // Find closest day on or after this date
     return sortedDays.find(d => d.date >= dateStr) ?? sortedDays[sortedDays.length - 1];
   }

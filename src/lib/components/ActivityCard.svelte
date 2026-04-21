@@ -111,8 +111,15 @@
     return `${title} japan`.slice(0, 50);
   }
 
+  // source.unsplash.com was deprecated in 2022 — use Lorem Picsum with a
+  // deterministic seed so the same activity always shows the same photo.
+  function strHash(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = (Math.imul(31, h) + s.charCodeAt(i)) | 0; }
+    return Math.abs(h);
+  }
   const imageUrl = $derived(
-    `https://source.unsplash.com/featured/128x128/?${encodeURIComponent(getImageQuery(activity.title, activity.location))}`
+    `https://picsum.photos/seed/${strHash(getImageQuery(activity.title, activity.location))}/128/128`
   );
 
   // ── Actions ───────────────────────────────────────────────────────────────

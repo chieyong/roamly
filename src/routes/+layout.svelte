@@ -140,9 +140,9 @@
             class="flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 transition-colors"
             style="color: var(--clr-subtle); background-color: {tripMenuOpen ? 'var(--clr-surface-alt)' : 'transparent'};"
           >
-            <span class="font-medium sm:hidden" style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              {$trip.name}
-            </span>
+            <!-- Mobile: short generic label to save header space -->
+            <span class="font-medium sm:hidden">Reizen</span>
+            <!-- Desktop: full trip name -->
             <span class="font-medium hidden sm:inline" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
               {$trip.name}
             </span>
@@ -395,14 +395,12 @@
     </div>
   </header>
 
-  <!-- Compact trip timeline: only on day pages; marker = currently open day -->
-  {#if isOnDag}
-    <div style="border-bottom: 1px solid var(--clr-border);">
-      <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
-        <TripTimeline markerDate={currentDayDate} />
-      </div>
+  <!-- Trip timeline strip: always visible; marker shows only on day pages -->
+  <div style="border-bottom: 1px solid var(--clr-border); background-color: {pageBg}; transition: background-color 0.3s ease;">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6" style="padding-top: 7px; padding-bottom: 7px;">
+      <TripTimeline markerDate={isOnDag ? currentDayDate : null} />
     </div>
-  {/if}
+  </div>
 
   <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
     {@render children()}

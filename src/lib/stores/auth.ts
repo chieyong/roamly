@@ -20,6 +20,10 @@ onAuthStateChanged(auth, (firebaseUser) => {
   _ready.set(true);
 });
 
+// Fallback: if Firebase doesn't respond within 3 s (e.g. no config / offline),
+// assume not logged in so the UI doesn't stay stuck on the loading state.
+setTimeout(() => _ready.set(true), 3000);
+
 export const user      = { subscribe: _user.subscribe };
 export const authReady = { subscribe: _ready.subscribe };
 
